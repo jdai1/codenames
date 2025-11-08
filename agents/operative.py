@@ -1,15 +1,15 @@
 from typing import List, Dict, Any
-import json
-from openai import OpenAI
 from agents.tool import Tool
 import logging
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+import json
+from litellm import completion
 
 logger = logging.getLogger(__name__)
 
 
 class VoteArguments(BaseModel):
-    word: str
+    word: str = Field(description="The word to vote for")
 
 
 class VoteTool(Tool):
@@ -37,6 +37,33 @@ class VoteTool(Tool):
         }
 
 
+class TalkArguments(BaseModel):
+    message: str = Field(description="The message to talk to the other operatives")
+
+
+class TalkTool(Tool):
+    """Tool for the agent to talk to the other operatives"""
+
+    Arguments = TalkArguments
+
+    @property
+    def name(self) -> str:
+        return "talk_tool"
+
+    @property
+    def description(self) -> str:
+        return "Talk to the other operatives. "
+
+    def execute(self, arguments: TalkArguments) -> dict:
+        """
+        Talk to the other operatives.
+        """
+        return {
+            "type": "talk",
+            "message": arguments.message,
+        }
+
+
 class OperativeAgent:
     def __init__(
         self,
@@ -48,7 +75,7 @@ class OperativeAgent:
     ):
         self.name = name
         self.system_prompt = system_prompt
-        self.tools = tools or [VoteTool()]
+        self.tools = tools or [VoteTool(), TalkTool()]
         self.model = model
         self.max_iterations = max_iterations
 
@@ -60,53 +87,103 @@ class OperativeAgent:
         Either say something to rest of the models,
         Or call a tool to vote for the next move.
         """
-        client = OpenAI()
 
-        # Build the messages list
-        messages = [{"role": "system", "content": self.system_prompt}]
+        # Build the message list: system -> prior history -> current user message
+        messages: List[Dict[str, Any]] = []
+        messages.append({"role": "system", "content": self.system_prompt})
         messages.extend(message_history)
         messages.append({"role": "user", "content": user_message})
 
-        # Convert tools to OpenAI format
-        openai_tools = [tool.to_openai_tool() for tool in self.tools]
+        # Prepare tools for the model
+        tool_list = [t.to_openai_tool() for t in (self.tools or [])]
+        tools_by_name = {t.name: t for t in (self.tools or [])}
 
-        # Make the API call
-        response = client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            tools=openai_tools if openai_tools else None,
-        )
+        # Iteratively allow the model to call tools and react
+        for _ in range(max(1, self.max_iterations)):
+            resp = completion(
+                model=self.model,
+                messages=messages,
+                tools=tool_list if tool_list else None,
+                tool_choice="required" if tool_list else None,
+            )
 
-        message = response.choices[0].message
+            choice = resp["choices"][0]["message"]
 
-        # Check if the agent wants to use a tool
-        if message.tool_calls:
-            tool_call = message.tool_calls[0]
-            tool_name = tool_call.function.name
-
-            # Find the matching tool
-            for tool in self.tools:
-                if hasattr(tool, "Name") and tool.Name == tool_name:
-                    # Parse the arguments and execute
-                    args = json.loads(tool_call.function.arguments)
-                    result = tool.execute(**args)
-
-                    return {
-                        "type": "tool_call",
-                        "tool": tool_name,
-                        "result": result,
-                        "agent": self.name,
-                    }
-
-            return {
-                "type": "error",
-                "error": f"Tool {tool_name} not found",
-                "agent": self.name,
+            # Append assistant message to conversation
+            assistant_msg: Dict[str, Any] = {
+                "role": "assistant",
+                "content": choice.get("content"),
             }
+            if "tool_calls" in choice and choice["tool_calls"]:
+                assistant_msg["tool_calls"] = choice["tool_calls"]
+            messages.append(assistant_msg)
 
-        # Otherwise, return the message content
+            # Handle tool calls if any
+            tool_calls = choice.get("tool_calls")
+            # Back-compat: also check for legacy single function_call
+            legacy_fn_call = choice.get("function_call")
+
+            if tool_calls:
+                for tc in tool_calls:
+                    func = tc.get("function", {})
+                    tool_name = func.get("name")
+                    raw_args = func.get("arguments") or "{}"
+                    parsed_args = json.loads(raw_args)
+
+                    tool_obj = tools_by_name.get(tool_name)
+                    result = tool_obj(**parsed_args) if tool_obj else {}
+
+                    # If the tool returns a structured action (vote/talk), return it
+                    if isinstance(result, dict) and result.get("type") in {
+                        "vote",
+                        "talk",
+                    }:
+                        return result
+
+                    # Otherwise, feed the tool result back into the conversation and continue
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc.get("id"),
+                            "name": tool_name,
+                            "content": json.dumps(result),
+                        }
+                    )
+                # Continue the loop to let the model react to tool outputs
+                continue
+
+            elif legacy_fn_call:
+                # Handle legacy single function_call format
+                tool_name = legacy_fn_call.get("name")
+                raw_args = legacy_fn_call.get("arguments") or "{}"
+                parsed_args = json.loads(raw_args)
+
+                tool_obj = tools_by_name.get(tool_name)
+                result = tool_obj(**parsed_args) if tool_obj else {}
+                if isinstance(result, dict) and result.get("type") in {"vote", "talk"}:
+                    return result
+
+                # Feed back and continue
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": legacy_fn_call.get("id"),
+                        "name": tool_name,
+                        "content": json.dumps(result),
+                    }
+                )
+                continue
+
+            # No tool calls -> remind the model to use tools only and continue
+            messages.append(
+                {
+                    "role": "system",
+                    "content": "You must respond by calling one of the provided tools (talk_tool or vote_tool). Do not output plain text.",
+                }
+            )
+
+        # Max iterations reached without a decisive action
         return {
-            "type": "message",
-            "content": message.content,
-            "agent": self.name,
+            "type": "talk",
+            "message": "Unable to proceed: no tool call produced.",
         }
