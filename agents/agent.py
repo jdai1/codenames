@@ -60,12 +60,7 @@ class Agent:
                 messages=messages,
                 tools=tool_list if tool_list else None,
                 tool_choice="auto" if tool_list else None,
-                stream=True,
             )
-            for part in resp:
-                print("PART", part)
-                
-            breakpoint()
 
             model_cost = completion_cost(completion_response=resp)
             token_usage = token_counter(model=self.model, messages=messages)
@@ -86,8 +81,6 @@ class Agent:
             tool_calls = choice.get("tool_calls")
             # Back-compat: also check for legacy single function_call
             legacy_fn_call = choice.get("function_call")
-
-            breakpoint()
 
             if tool_calls:
                 for tc in tool_calls:
