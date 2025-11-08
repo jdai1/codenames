@@ -44,6 +44,8 @@ After thinking step by step, return a tool call containing your word and the qua
 """
 
 SPYMASTER_USER_PROMPT = """
+You are on the {team} team. You must signal your team to guess the words marked with the {team_emoji} emoji, and avoid the words marked with the {opponent_emoji} emoji or 💀.
+
 The current state of the board is:
 {board}
 

@@ -11,12 +11,16 @@ from agents.prompts import (
     SPYMASTER_USER_PROMPT,
 )
 
-from engine.api import CodenamesGame, GameStateResponse
+from engine.game_main import CodenamesGame, GameStateResponse
 
 
 def _name(val: Any) -> str:
     """Return enum name or value as a plain string."""
     return getattr(val, "name", str(val))
+
+
+def _team_to_emoji(team: str) -> str:
+    return "🟦" if team == "BLUE" else "🟥"
 
 
 def format_board_for_spymaster(game: CodenamesGame) -> str:
@@ -70,9 +74,19 @@ def spymaster_turn(
     # Build spymaster view
     state = game.get_state(show_colors=True)
     board_str = format_board_for_spymaster(game)
-    team = state.current_turn.team
+    team = _name(state.current_turn.team)
+    team_emoji = _team_to_emoji(team)
+    opponent_emoji = _team_to_emoji("RED") if team == "BLUE" else _team_to_emoji("BLUE")
     remaining = remaining_words_for_team(state, team)
-    user_msg = SPYMASTER_USER_PROMPT.format(board=board_str, remaining_words=remaining)
+    user_msg = SPYMASTER_USER_PROMPT.format(
+        team=team,
+        team_emoji=team_emoji,
+        opponent_emoji=opponent_emoji,
+        board=board_str,
+        remaining_words=remaining,
+    )
+
+    print(f"Spymaster user message: {user_msg}")
 
     result, assistant_msg, _, _ = spymaster.run(
         user_message=user_msg, message_history=message_history
@@ -109,7 +123,7 @@ def guesser_turn(
     game: CodenamesGame,
     ops: List[Agent],
     message_history: List[Dict[str, str]],
-    max_rounds: int = 3,
+    max_rounds: int = 25,
 ) -> None:
     """Coordinate operative discussion and majority voting for guesses until turn ends or pass."""
     team_turn = game.get_current_turn().team
