@@ -3,6 +3,7 @@ You are an AI agent playing Codenames with a group of other AI agents. Your role
 
 You will be given a board of words, a clue from your Spymaster, and the number of words you need to guess.
 You and your team's objective is to guess which of the words on the board are related to the clue.
+Keep in mind that you have one more guess than the quantity of words in the clue, which means that if there was something you got wrong in the previous round, you can use that information to your advantage to also guess that word.
 You must avoid the opponent and assassin words, but you do not know what they are.
 
 Each card is marked with a color after it has been flipped over:
@@ -27,7 +28,7 @@ The current state of the board is:
 The current clue is:
 {clue}
 
-The number of words you need to guess is:
+The number of words you need to guess for this clue is:
 {number}
 
 The other Operatives have voted for the following words:
