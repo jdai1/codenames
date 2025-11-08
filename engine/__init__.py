@@ -1,0 +1,1 @@
+"""Minimal Codenames game engine."""
