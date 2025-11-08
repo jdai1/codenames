@@ -4,8 +4,7 @@ from typing import Any, Dict, List
 
 from litellm import completion, completion_cost, token_counter
 
-from agents.operative_tools import TalkTool, VoteTool
-from agents.prompts import OPERATIVE_SYSTEM_PROMPT
+from agents.operative_tools import TalkTool, VoteTool, PassTool
 from agents.spymaster_tools import HintTool
 
 logger = logging.getLogger(__name__)
@@ -25,7 +24,7 @@ class Agent:
         self.system_prompt = system_prompt
         self.role = role
         if self.role == "operative" and tools is None:
-            self.tools = [VoteTool(), TalkTool()]
+            self.tools = [VoteTool(), TalkTool(), PassTool()]
         elif self.role == "spymaster" and tools is None:
             self.tools = [HintTool()]
         else:
@@ -92,10 +91,11 @@ class Agent:
                     tool_obj = tools_by_name.get(tool_name)
                     result = tool_obj(**parsed_args) if tool_obj else {}
 
-                    # If the tool returns a structured action (vote/talk), return it
+                    # If the tool returns a structured action, return it
                     if isinstance(result, dict) and result.get("type") in {
                         "vote",
                         "talk",
+                        "pass",
                         "hint",
                     }:
                         return result, assistant_msg, model_cost, token_usage
@@ -120,7 +120,12 @@ class Agent:
 
                 tool_obj = tools_by_name.get(tool_name)
                 result = tool_obj(**parsed_args) if tool_obj else {}
-                if isinstance(result, dict) and result.get("type") in {"vote", "talk"}:
+                if isinstance(result, dict) and result.get("type") in {
+                    "vote",
+                    "talk",
+                    "pass",
+                    "hint",
+                }:
                     return result, assistant_msg, model_cost, token_usage
 
                 # Feed back and continue
@@ -138,7 +143,7 @@ class Agent:
             messages.append(
                 {
                     "role": "system",
-                    "content": "You must respond by calling one of the provided tools (talk_tool or vote_tool). Do not output plain text.",
+                    "content": "You must respond by calling one of the provided tools (talk_tool, vote_tool, pass_tool, or hint_tool). Do not output plain text.",
                 }
             )
 

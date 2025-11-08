@@ -129,7 +129,6 @@ def guesser_turn(
     team_turn = game.get_current_turn().team
     while True:
         # Refresh state for display and constraints
-        state = game.get_state(show_colors=False)
         board_str = format_board_for_operatives(game)
         last_hint = game.get_last_hint()
         if last_hint is None:
@@ -169,6 +168,11 @@ def guesser_turn(
                         votes_this_cycle.append(word)
                         votes_accumulated.append(word)
                         print(f"[{agent.name}] votes: {word.upper()}")
+                elif result.get("type") == "pass":
+                    # Treat 'pass' as a vote option; require majority like word guesses
+                    votes_this_cycle.append("pass")
+                    votes_accumulated.append("pass")
+                    print(f"[{agent.name}] votes: PASS")
                 else:
                     # Ignore unknown result types
                     pass
@@ -176,48 +180,70 @@ def guesser_turn(
                 # Check majority after each action
                 majority = collect_majority_vote(votes_this_cycle, quorum=len(ops))
                 if majority:
-                    guess_word = majority
-                    try:
-                        guess_res = game.make_guess(word=guess_word)
-                    except Exception as e:  # pylint: disable=broad-except
+                    if majority == "pass":
+                        # Majority agrees to pass
+                        try:
+                            _ = game.pass_turn()
+                        except Exception as e:  # pylint: disable=broad-except
+                            message_history.append(
+                                {
+                                    "role": "assistant",
+                                    "content": f"system: pass failed: {e}",
+                                }
+                            )
+                            print(f"Pass failed: {e}")
+                        else:
+                            message_history.append(
+                                {
+                                    "role": "assistant",
+                                    "content": "system: team decided to PASS",
+                                }
+                            )
+                            print("Team reached majority to PASS. Passing turn.")
+                        return
+                    else:
+                        guess_word = majority
+                        try:
+                            guess_res = game.make_guess(word=guess_word)
+                        except Exception as e:  # pylint: disable=broad-except
+                            message_history.append(
+                                {
+                                    "role": "assistant",
+                                    "content": f"system: guess '{guess_word}' failed: {e}",
+                                }
+                            )
+                            print(f"Guess '{guess_word.upper()}' failed: {e}")
+                            return
+
+                        # Log outcome
+                        correctness = "correct" if guess_res.correct else "wrong"
                         message_history.append(
                             {
                                 "role": "assistant",
-                                "content": f"system: guess '{guess_word}' failed: {e}",
+                                "content": f"system: guessed {guess_word.upper()} -> {correctness}; left_guesses={guess_res.left_guesses}",
                             }
                         )
-                        print(f"Guess '{guess_word.upper()}' failed: {e}")
-                        return
+                        print(
+                            f"Guess -> {guess_word.upper()} ({correctness}); left_guesses={guess_res.left_guesses}"
+                        )
+                        # Show updated board after guess
+                        print("Board (spectator view - uncensored) after guess:")
+                        print(format_board_for_spymaster(game))
 
-                    # Log outcome
-                    correctness = "correct" if guess_res.correct else "wrong"
-                    message_history.append(
-                        {
-                            "role": "assistant",
-                            "content": f"system: guessed {guess_word.upper()} -> {correctness}; left_guesses={guess_res.left_guesses}",
-                        }
-                    )
-                    print(
-                        f"Guess -> {guess_word.upper()} ({correctness}); left_guesses={guess_res.left_guesses}"
-                    )
-                    # Show updated board after guess
-                    print("Board (spectator view - uncensored) after guess:")
-                    print(format_board_for_spymaster(game))
+                        # If game ended or turn switched (wrong or out of guesses), break out
+                        if guess_res.is_game_over:
+                            return
 
-                    # If game ended or turn switched (wrong or out of guesses), break out
-                    if guess_res.is_game_over:
-                        return
+                        # After a correct guess, if still this team's guess turn continues automatically
+                        ct = game.get_current_turn()
+                        if (
+                            _name(ct.team) != _name(team_turn)
+                            or _name(ct.role) != "GUESSER"
+                        ):
+                            return
 
-                    # After a correct guess, if still this team's guess turn continues automatically
-                    ct = game.get_current_turn()
-                    if (
-                        _name(ct.team) != _name(team_turn)
-                        or _name(ct.role) != "GUESSER"
-                    ):
-                        return
-
-                    # Continue to next guess in same turn
-                    break  # break inner loop to start a new guess cycle within same turn
+                        # Continue to next guess in same turn
+                        break  # break inner loop to start a new guess cycle within same turn
 
         # Reached here with no majority across all rounds -> pass the turn
         try:
