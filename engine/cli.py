@@ -1,30 +1,12 @@
 #!/usr/bin/env python3
 """Simple CLI for Codenames game."""
 
-from engine.game import CodenamesGame
+from engine.game_main import CodenamesGame
 
 
 def print_board(game, show_colors=False):
     """Print the current board state."""
-    board = game.get_board(show_colors=show_colors)
-
-    if show_colors:
-        print("\n=== BOARD (SPYMASTER VIEW) ===")
-    else:
-        print("\n=== BOARD (OPERATIVE VIEW) ===")
-
-    # Print board in a grid format (5x5)
-    for i in range(0, len(board), 5):
-        row = board[i:i+5]
-        for card in row:
-            color_emoji = ""
-            if card.color:
-                emoji_map = {"RED": "🟥", "BLUE": "🟦", "GRAY": "⬜", "BLACK": "💀"}
-                color_emoji = emoji_map.get(card.color, "")
-            revealed_marker = "✓" if card.revealed else " "
-            print(f"{revealed_marker}{color_emoji} {card.word:12}", end=" ")
-        print()
-    print()
+    print(game.state.board.printable_string if show_colors else game.state.board.censored.printable_string)
 
 
 def print_score(game):
@@ -124,6 +106,7 @@ def main():
                         correct_marker = "✓ Correct!" if result.correct else "✗ Wrong team!"
                         print(f"\nRevealed: {card.word} - {card.color}")
                         print(f"Result: {correct_marker}")
+                        print_board(game, show_colors=False)
                         print_score(game)
 
                         if result.is_game_over:

@@ -4,7 +4,8 @@
 import json
 import time
 from typing import Dict
-from flask import Flask, request, jsonify, Response, stream_with_context
+
+from flask import Flask, Response, jsonify, request, stream_with_context
 from flask_cors import CORS
 
 from engine.game import CodenamesGame
@@ -20,11 +21,9 @@ games: Dict[str, CodenamesGame] = {}
 @app.route("/", methods=["GET"])
 def health_check():
     """Health check endpoint."""
-    return jsonify({
-        "name": "Codenames API",
-        "version": "1.0.0",
-        "active_games": len(games)
-    })
+    return jsonify(
+        {"name": "Codenames API", "version": "1.0.0", "active_games": len(games)}
+    )
 
 
 @app.route("/games", methods=["POST"])
@@ -49,10 +48,9 @@ def create_game():
         game = CodenamesGame(language=language, board_size=board_size, seed=seed)
         games[game.game_id] = game
 
-        return jsonify({
-            "game_id": game.game_id,
-            "message": "Game created successfully"
-        }), 201
+        return jsonify(
+            {"game_id": game.game_id, "message": "Game created successfully"}
+        ), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
@@ -168,15 +166,22 @@ def ai_give_hint(game_id: str):
     def generate():
         # TODO: Replace with actual AI agent function that yields ReasoningTokens
         # For now, simulate reasoning tokens
-        token1 = ReasoningToken(type=ReasoningTokenType.GIVE_HINT_REASONING, content="Analyzing board...")
+        token1 = ReasoningToken(
+            type=ReasoningTokenType.GIVE_HINT_REASONING, content="Analyzing board..."
+        )
         yield json.dumps(token1.dict()) + "\n\n"
         time.sleep(0.5)
 
-        token2 = ReasoningToken(type=ReasoningTokenType.GIVE_HINT_REASONING, content="Identifying patterns...")
+        token2 = ReasoningToken(
+            type=ReasoningTokenType.GIVE_HINT_REASONING,
+            content="Identifying patterns...",
+        )
         yield json.dumps(token2.dict()) + "\n\n"
         time.sleep(0.5)
 
-        token3 = ReasoningToken(type=ReasoningTokenType.GIVE_HINT_REASONING, content="Generating hint...")
+        token3 = ReasoningToken(
+            type=ReasoningTokenType.GIVE_HINT_REASONING, content="Generating hint..."
+        )
         yield json.dumps(token3.dict()) + "\n\n"
         time.sleep(0.5)
 
@@ -188,8 +193,7 @@ def ai_give_hint(game_id: str):
         try:
             result = game.give_hint(word, card_amount)
             result_token = ReasoningToken(
-                type=ReasoningTokenType.GIVE_HINT_RESULT,
-                content=result.dict()
+                type=ReasoningTokenType.GIVE_HINT_RESULT, content=result.dict()
             )
             yield json.dumps(result_token.dict()) + "\n\n"
         except ValueError as e:
@@ -198,11 +202,8 @@ def ai_give_hint(game_id: str):
 
     return Response(
         stream_with_context(generate()),
-        mimetype='text/event-stream',
-        headers={
-            'Cache-Control': 'no-cache',
-            'X-Accel-Buffering': 'no'
-        }
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
@@ -230,15 +231,21 @@ def ai_make_guess(game_id: str):
     def generate():
         # TODO: Replace with actual AI agent function that yields ReasoningTokens
         # For now, simulate reasoning tokens
-        token1 = ReasoningToken(type=ReasoningTokenType.MAKE_GUESS_REASONING, content="Processing hint...")
+        token1 = ReasoningToken(
+            type=ReasoningTokenType.MAKE_GUESS_REASONING, content="Processing hint..."
+        )
         yield f"data: {json.dumps(token1.dict())}\n\n"
         time.sleep(0.5)
 
-        token2 = ReasoningToken(type=ReasoningTokenType.MAKE_GUESS_REASONING, content="Evaluating cards...")
+        token2 = ReasoningToken(
+            type=ReasoningTokenType.MAKE_GUESS_REASONING, content="Evaluating cards..."
+        )
         yield f"data: {json.dumps(token2.dict())}\n\n"
         time.sleep(0.5)
 
-        token3 = ReasoningToken(type=ReasoningTokenType.MAKE_GUESS_REASONING, content="Making decision...")
+        token3 = ReasoningToken(
+            type=ReasoningTokenType.MAKE_GUESS_REASONING, content="Making decision..."
+        )
         yield f"data: {json.dumps(token3.dict())}\n\n"
         time.sleep(0.5)
 
@@ -253,31 +260,30 @@ def ai_make_guess(game_id: str):
             try:
                 result = game.make_guess(guess_word)
                 result_token = ReasoningToken(
-                    type=ReasoningTokenType.MAKE_GUESS_RESULT,
-                    content=result.dict()
+                    type=ReasoningTokenType.MAKE_GUESS_RESULT, content=result.dict()
                 )
                 yield f"data: {json.dumps(result_token.dict())}\n\n"
             except ValueError as e:
-                error_token = ReasoningToken(type=ReasoningTokenType.ERROR, content=str(e))
+                error_token = ReasoningToken(
+                    type=ReasoningTokenType.ERROR, content=str(e)
+                )
                 yield f"data: {json.dumps(error_token.dict())}\n\n"
         else:
             # Pass if no cards left
             try:
                 result = game.pass_turn()
                 result_token = ReasoningToken(
-                    type=ReasoningTokenType.MAKE_GUESS_RESULT,
-                    content=result.dict()
+                    type=ReasoningTokenType.MAKE_GUESS_RESULT, content=result.dict()
                 )
                 yield f"data: {json.dumps(result_token.dict())}\n\n"
             except ValueError as e:
-                error_token = ReasoningToken(type=ReasoningTokenType.ERROR, content=str(e))
+                error_token = ReasoningToken(
+                    type=ReasoningTokenType.ERROR, content=str(e)
+                )
                 yield f"data: {json.dumps(error_token.dict())}\n\n"
 
     return Response(
         stream_with_context(generate()),
-        mimetype='text/event-stream',
-        headers={
-            'Cache-Control': 'no-cache',
-            'X-Accel-Buffering': 'no'
-        }
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

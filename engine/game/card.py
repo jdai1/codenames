@@ -16,7 +16,8 @@ class Card(BaseModel):
         result = self.word
         if self.color:
             result = f"{self.color.emoji} {self.word}"
-        # result += " V" if self.revealed else " X"
+            if self.revealed:
+                result += " ✓"
         return result
 
     def __hash__(self):

@@ -1,8 +1,11 @@
-from typing import List, Dict, Any
-import logging
 import json
+import logging
+from typing import Any, Dict, List
+
 from litellm import completion, completion_cost, token_counter
-from agents.operative_tools import VoteTool, TalkTool
+
+from agents.operative_tools import TalkTool, VoteTool
+from agents.prompts import OPERATIVE_SYSTEM_PROMPT
 from agents.spymaster_tools import HintTool
 
 logger = logging.getLogger(__name__)
@@ -57,7 +60,13 @@ class Agent:
                 messages=messages,
                 tools=tool_list if tool_list else None,
                 tool_choice="auto" if tool_list else None,
+                stream=True,
             )
+            for part in resp:
+                print("PART", part)
+                
+            breakpoint()
+
             model_cost = completion_cost(completion_response=resp)
             token_usage = token_counter(model=self.model, messages=messages)
             choice = resp["choices"][0]["message"]
@@ -77,6 +86,8 @@ class Agent:
             tool_calls = choice.get("tool_calls")
             # Back-compat: also check for legacy single function_call
             legacy_fn_call = choice.get("function_call")
+
+            breakpoint()
 
             if tool_calls:
                 for tc in tool_calls:
@@ -143,7 +154,8 @@ class Agent:
             model_cost = completion_cost(completion_response=resp)
             token_usage = token_counter(model=self.model, messages=messages)
         except Exception as e:
-            logger.warning(f"Error calculating completion cost: {e}")
+            # logger.warning(f"Error calculating completion cost: {e}")
+            print(f"Error calculating completion cost: {e}")
         return (
             {
                 "type": "talk",
@@ -153,3 +165,43 @@ class Agent:
             model_cost,
             token_usage,
         )
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+
+    # Example: Create an operative agent
+    agent = Agent(
+        name="TestOperative",
+        system_prompt="",
+        role="operative",
+        model="gpt-4o-mini",
+        max_iterations=10,
+    )
+
+    # Example board state and user message
+    user_message = """
+The current state of the board is:
+PIANO, GUITAR, DRUM, VIOLIN, TRUMPET
+
+The current clue is:
+MUSIC 3
+
+The number of words you need to guess is:
+3
+
+The other Operatives have voted for the following words:
+None yet
+
+You must pick a tool no matter what
+"""
+
+    # Run the agent
+    message_history = []
+    result, assistant_msg, cost, tokens = agent.run(user_message, message_history)
+
+    print("\n=== Agent Result ===")
+    print(f"Result: {result}")
+    print(f"Cost: ${cost:.4f}")
+    print(f"Tokens: {tokens}")
+    print(f"Assistant message: {assistant_msg}")
