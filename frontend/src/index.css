@@ -1,1 +1,11 @@
 @import 'tailwindcss';
+
+input,
+button,
+select {
+  cursor: pointer;
+
+  &:hover {
+    filter: brightness(0.95);
+  }
+}
