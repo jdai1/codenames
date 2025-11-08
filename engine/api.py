@@ -4,7 +4,8 @@
 import json
 import time
 from typing import Dict
-from flask import Flask, request, jsonify, Response, stream_with_context
+
+from flask import Flask, Response, jsonify, request, stream_with_context
 from flask_cors import CORS
 
 from engine.game import CodenamesGame

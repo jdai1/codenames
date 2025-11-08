@@ -8,4 +8,9 @@ select {
   &:hover {
     filter: brightness(0.95);
   }
+
+  &:disabled {
+    opacity: 0.5;
+    filter: none;
+  }
 }

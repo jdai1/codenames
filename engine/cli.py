@@ -128,6 +128,7 @@ def main():
                         )
                         print(f"\nRevealed: {card.word} - {card.color}")
                         print(f"Result: {correct_marker}")
+                        print_board(game, show_colors=False)
                         print_score(game)
 
                         if result.is_game_over:

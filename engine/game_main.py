@@ -22,7 +22,6 @@ from engine.schema import (
 
 # ===== Utility Functions =====
 
-
 def sanitize_word(word: str) -> str:
     """
     Sanitize a word to only contain lowercase English letters and spaces.
@@ -40,28 +39,22 @@ def sanitize_word(word: str) -> str:
     word = word.strip()
 
     # Check if word only contains letters and spaces
-    if not re.match(r"^[a-zA-Z\s]+$", word):
+    if not re.match(r'^[a-zA-Z\s]+$', word):
         raise ValueError(f"Word must only contain English letters and spaces: '{word}'")
 
     # Convert to lowercase and normalize spaces
     word = word.lower()
-    word = re.sub(r"\s+", " ", word)  # Replace multiple spaces with single space
+    word = re.sub(r'\s+', ' ', word)  # Replace multiple spaces with single space
 
     return word
 
 
 # ===== Main API =====
 
-
 class CodenamesGame:
     """Main API interface for a Codenames game."""
 
-    def __init__(
-        self,
-        language: str = "english",
-        board_size: int = 25,
-        seed: Optional[int] = None,
-    ):
+    def __init__(self, language: str = "english", board_size: int = 25, seed: Optional[int] = None):
         """
         Create a new Codenames game.
 
@@ -72,7 +65,9 @@ class CodenamesGame:
         """
         self.game_id = str(uuid4())
         board = generate_board(
-            language=SupportedLanguage.ENGLISH, board_size=board_size, seed=seed
+            language=SupportedLanguage.ENGLISH,
+            board_size=board_size,
+            seed=seed
         )
         self.state = new_game_state(board=board)
 
@@ -92,7 +87,10 @@ class CodenamesGame:
         board = self.state.board if show_colors else self.state.board.censored
         return [
             CardWithIndex(
-                index=i, word=card.word, color=card.color, revealed=card.revealed
+                index=i,
+                word=card.word,
+                color=card.color,
+                revealed=card.revealed
             )
             for i, card in enumerate(board.cards)
         ]
@@ -116,7 +114,10 @@ class CodenamesGame:
             card = card.censored
 
         return CardWithIndex(
-            index=index, word=card.word, color=card.color, revealed=card.revealed
+            index=index,
+            word=card.word,
+            color=card.color,
+            revealed=card.revealed
         )
 
     def get_score(self):
@@ -138,7 +139,7 @@ class CodenamesGame:
         return TurnInfo(
             team=self.state.current_team_color,
             role=self.state.current_player_role,
-            left_guesses=self.state.left_guesses,
+            left_guesses=self.state.left_guesses
         )
 
     def get_hints(self):
@@ -189,7 +190,7 @@ class CodenamesGame:
             last_hint=self.get_last_hint(),
             is_game_over=self.is_game_over(),
             winner=self.get_winner(),
-            board_size=len(self.state.board.cards),
+            board_size=len(self.state.board.cards)
         )
 
     # ===== Game Actions =====
@@ -218,7 +219,9 @@ class CodenamesGame:
             return HintResult(success=False, reason="quit")
 
         return HintResult(
-            success=True, hint=given_hint, left_guesses=self.state.left_guesses
+            success=True,
+            hint=given_hint,
+            left_guesses=self.state.left_guesses
         )
 
     def make_guess(self, word: str) -> GuessResult:
@@ -262,7 +265,7 @@ class CodenamesGame:
             correct=given_guess.correct,
             left_guesses=self.state.left_guesses,
             is_game_over=self.state.is_game_over,
-            winner=self.get_winner(),
+            winner=self.get_winner()
         )
 
     def pass_turn(self) -> PassResult:
@@ -279,7 +282,9 @@ class CodenamesGame:
         self.state.process_guess(guess)
 
         return PassResult(
-            success=True, action="passed", next_team=self.state.current_team_color
+            success=True,
+            action="passed",
+            next_team=self.state.current_team_color
         )
 
     # ===== Utility Methods =====
