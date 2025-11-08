@@ -39,3 +39,14 @@ yarn-error.log*
 
 # Windows specific files
 Thumbs.db
+
+
+# Python specific files
+**/__pycache__/
+**/*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+*.pywz
+*.pyzw

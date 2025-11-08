@@ -1,61 +1,38 @@
 from typing import List, Dict, Any
-import json
-from agents.tool import Tool
 import logging
-from pydantic import BaseModel
-from litellm import completion
-
+import json
+from litellm import completion, completion_cost, token_counter
+from agents.operative_tools import VoteTool, TalkTool
+from agents.spymaster_tools import HintTool
 
 logger = logging.getLogger(__name__)
 
 
-class HintArguments(BaseModel):
-    clue: str
-    quantity: int
-
-
-class HintTool(Tool):
-    """Tool for the agent to vote for the next guess"""
-
-    Arguments = HintArguments
-
-    @property
-    def name(self) -> str:
-        return "hint_tool"
-
-    @property
-    def description(self) -> str:
-        return "Give a hint to the operatives and the number of words on the board that relate to that hint."
-
-    def execute(self, arguments: HintArguments) -> dict:
-        """
-        Give a hint to the operatives and the number of words on the board that relate to that hint.
-        """
-        return {
-            "type": "hint",
-            "clue": arguments.clue,
-            "quantity": arguments.quantity,
-        }
-
-
-class SpymasterAgent:
+class Agent:
     def __init__(
         self,
         name: str,
         system_prompt: str,
-        tools: List[Any],
+        role: str,
         model: str,
         max_iterations: int = 30,
+        tools: List[Any] = None,
     ):
         self.name = name
         self.system_prompt = system_prompt
-        self.tools = tools or [HintTool()]
+        self.role = role
+        if self.role == "operative" and tools is None:
+            self.tools = [VoteTool(), TalkTool()]
+        elif self.role == "spymaster" and tools is None:
+            self.tools = [HintTool()]
+        else:
+            self.tools = tools
         self.model = model
         self.max_iterations = max_iterations
 
     def run(
         self, user_message: str, message_history: List[Dict[str, str]]
-    ) -> tuple[Dict[str, str], Dict[str, Any]]:
+    ) -> tuple[Dict[str, str], Dict[str, Any], float, int]:
         """
         Given past messages in the history, and the state of the board (inside of user message),
         Either say something to rest of the models,
@@ -71,7 +48,8 @@ class SpymasterAgent:
         # Prepare tools for the model
         tool_list = [t.to_openai_tool() for t in (self.tools or [])]
         tools_by_name = {t.name: t for t in (self.tools or [])}
-
+        model_cost = 0
+        token_usage = 0
         # Iteratively allow the model to call tools and react
         for _ in range(max(1, self.max_iterations)):
             resp = completion(
@@ -80,7 +58,8 @@ class SpymasterAgent:
                 tools=tool_list if tool_list else None,
                 tool_choice="required" if tool_list else None,
             )
-
+            model_cost = completion_cost(completion_response=resp)
+            token_usage = token_counter(model=self.model, messages=messages)
             choice = resp["choices"][0]["message"]
 
             # Append assistant message to conversation
@@ -114,7 +93,7 @@ class SpymasterAgent:
                         "vote",
                         "talk",
                     }:
-                        return result, assistant_msg
+                        return result, assistant_msg, model_cost, token_usage
 
                     # Otherwise, feed the tool result back into the conversation and continue
                     messages.append(
@@ -137,7 +116,7 @@ class SpymasterAgent:
                 tool_obj = tools_by_name.get(tool_name)
                 result = tool_obj(**parsed_args) if tool_obj else {}
                 if isinstance(result, dict) and result.get("type") in {"vote", "talk"}:
-                    return result
+                    return result, assistant_msg, model_cost, token_usage
 
                 # Feed back and continue
                 messages.append(
@@ -159,7 +138,17 @@ class SpymasterAgent:
             )
 
         # Max iterations reached without a decisive action
-        return {
-            "type": "talk",
-            "message": "Unable to proceed: no tool call produced.",
-        }, assistant_msg
+        try:
+            model_cost = completion_cost(completion_response=resp)
+            token_usage = token_counter(model=self.model, messages=resp)
+        except Exception as e:
+            logger.warning(f"Error calculating completion cost: {e}")
+        return (
+            {
+                "type": "talk",
+                "message": "Unable to proceed: no tool call produced.",
+            },
+            assistant_msg,
+            model_cost,
+            token_usage,
+        )
