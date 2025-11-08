@@ -3,8 +3,7 @@ import json
 from collections import Counter, defaultdict
 from typing import List, Dict, Any, Tuple
 
-from agents.operative import OperativeAgent, VoteTool, TalkTool
-from agents.spymaster import SpymasterAgent, HintTool
+from agents.agent import Agent
 from agents.prompts import (
     OPERATIVE_SYSTEM_PROMPT,
     OPERATIVE_USER_PROMPT,
@@ -13,7 +12,6 @@ from agents.prompts import (
 )
 
 from engine.api import CodenamesGame, GameStateResponse
-from engine.game.color import TeamColor
 
 
 def _name(val: Any) -> str:
@@ -38,24 +36,24 @@ def remaining_words_for_team(state: GameStateResponse, team: Any) -> int:
     return state.score.red.unrevealed
 
 
-def build_spymaster(team_name: str, model: str) -> SpymasterAgent:
-    return SpymasterAgent(
+def build_spymaster(team_name: str, model: str) -> Agent:
+    return Agent(
         name=f"{team_name}-spymaster",
         system_prompt=SPYMASTER_SYSTEM_PROMPT,
-        tools=[HintTool()],
+        role="spymaster",
         model=model,
         max_iterations=8,
     )
 
 
-def build_operatives(team_name: str, model: str, n: int = 3) -> List[OperativeAgent]:
-    agents: List[OperativeAgent] = []
+def build_operatives(team_name: str, model: str, n: int = 3) -> List[Agent]:
+    agents: List[Agent] = []
     for i in range(n):
         agents.append(
-            OperativeAgent(
+            Agent(
                 name=f"{team_name}-op-{i + 1}",
                 system_prompt=OPERATIVE_SYSTEM_PROMPT,
-                tools=[VoteTool(), TalkTool()],
+                role="operative",
                 model=model,
                 max_iterations=8,
             )
@@ -65,7 +63,7 @@ def build_operatives(team_name: str, model: str, n: int = 3) -> List[OperativeAg
 
 def spymaster_turn(
     game: CodenamesGame,
-    spymaster: SpymasterAgent,
+    spymaster: Agent,
     message_history: List[Dict[str, str]],
 ) -> Tuple[bool, Dict[str, Any]]:
     """Handle a single spymaster turn. Returns (success, result_dict)."""
@@ -76,7 +74,7 @@ def spymaster_turn(
     remaining = remaining_words_for_team(state, team)
     user_msg = SPYMASTER_USER_PROMPT.format(board=board_str, remaining_words=remaining)
 
-    result, assistant_msg = spymaster.run(
+    result, assistant_msg, _, _ = spymaster.run(
         user_message=user_msg, message_history=message_history
     )
     if result.get("type") != "hint":
@@ -109,7 +107,7 @@ def collect_majority_vote(votes: List[str], quorum: int) -> str | None:
 
 def guesser_turn(
     game: CodenamesGame,
-    ops: List[OperativeAgent],
+    ops: List[Agent],
     message_history: List[Dict[str, str]],
     max_rounds: int = 3,
 ) -> None:
@@ -142,7 +140,7 @@ def guesser_turn(
                     if votes_accumulated
                     else "(none)",
                 )
-                result, assistant_msg = agent.run(
+                result, assistant_msg, _, _ = agent.run(
                     user_message=user_msg, message_history=message_history
                 )
                 if result.get("type") == "talk":
@@ -248,6 +246,7 @@ def main():
 
         if _name(turn.role) == "HINTER":
             spy = blue_spy if team_key == "BLUE" else red_spy
+            print(f"Spymaster history: {spymaster_histories[team_key]}")
             ok, info = spymaster_turn(game, spy, spymaster_histories[team_key])
             if not ok:
                 print(f"Spymaster error for {team_key}: {info}")
