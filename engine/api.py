@@ -8,7 +8,7 @@ from typing import Dict
 from flask import Flask, Response, jsonify, request, stream_with_context
 from flask_cors import CORS
 
-from engine.game import CodenamesGame
+from engine.game_main import CodenamesGame
 from engine.schema import ReasoningToken, ReasoningTokenType
 
 app = Flask(__name__)
@@ -22,7 +22,8 @@ games: Dict[str, CodenamesGame] = {}
 def health_check():
     """Health check endpoint."""
     return jsonify(
-        {"name": "Codenames API", "version": "1.0.0", "active_games": len(games)}
+        {"name": "Codenames API", "version": "1.0.0",
+            "active_games": len(games)}
     )
 
 
@@ -45,7 +46,8 @@ def create_game():
     seed = data.get("seed")
 
     try:
-        game = CodenamesGame(language=language, board_size=board_size, seed=seed)
+        game = CodenamesGame(
+            language=language, board_size=board_size, seed=seed)
         games[game.game_id] = game
 
         return jsonify(
@@ -197,7 +199,8 @@ def ai_give_hint(game_id: str):
             )
             yield json.dumps(result_token.dict()) + "\n\n"
         except ValueError as e:
-            error_token = ReasoningToken(type=ReasoningTokenType.ERROR, content=str(e))
+            error_token = ReasoningToken(
+                type=ReasoningTokenType.ERROR, content=str(e))
             yield json.dumps(error_token.dict()) + "\n\n"
 
     return Response(
@@ -287,3 +290,7 @@ def ai_make_guess(game_id: str):
         mimetype="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8080, debug=True)

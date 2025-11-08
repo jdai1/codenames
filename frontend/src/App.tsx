@@ -114,8 +114,6 @@ function App() {
 
         <button className='rounded bg-amber-400 p-2 px-4'>Start game</button>
 
-        <button className='rounded bg-amber-400 p-2 px-4'>Start game</button>
-
         <span className='flex gap-2 items-center'>
           <label htmlFor='spymasterModeToggle'>Spymaster View</label>
 
@@ -127,21 +125,12 @@ function App() {
         <div className='col-span-1 bg-gray-100'>
           <ChatHistory team='RED' />
         </div>
-        <div className='col-span-1 bg-gray-100'>
-          <ChatHistory team='RED' />
-        </div>
         <div className='col-span-3 bg-gray-200 p-4'>
           <div className={`grid grid-cols-${mCards} grid-rows-${nCards} gap-2`}>
             {cards.map((card) => (
               <Card label={card.label} type={card.type} />
             ))}
-            {cards.map((card) => (
-              <Card label={card.label} type={card.type} />
-            ))}
           </div>
-        </div>
-        <div className='col-span-1 bg-gray-100'>
-          <ChatHistory team='BLUE' />
         </div>
         <div className='col-span-1 bg-gray-100'>
           <ChatHistory team='BLUE' />

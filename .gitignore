@@ -50,3 +50,5 @@ Thumbs.db
 *.pyz
 *.pywz
 *.pyzw
+
+uv.lock
