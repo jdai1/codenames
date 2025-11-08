@@ -91,6 +91,10 @@ def spymaster_turn(
     result, assistant_msg, _, _ = spymaster.run(
         user_message=user_msg, message_history=message_history
     )
+    # PRINT HIDDEN REASONING IF IT EXISTS (skip empty/None)
+    _reason = assistant_msg.get("reasoning_content") or assistant_msg.get("content")
+    if _reason:
+        print(f"[{spymaster.name}] reasoning: {_reason}")
     if result.get("type") != "hint":
         return False, {"reason": f"unexpected result: {result}"}
 
@@ -161,6 +165,12 @@ def guesser_turn(
                 result, assistant_msg, _, _ = agent.run(
                     user_message=user_msg, message_history=message_history
                 )
+                # PRINT HIDDEN REASONING IF IT EXISTS (skip empty/None)
+                _reason = assistant_msg.get("reasoning_content") or assistant_msg.get(
+                    "content"
+                )
+                if _reason:
+                    print(f"[{agent.name}] reasoning: {_reason}")
                 if result.get("type") == "talk":
                     talk_msg = result.get("message", "")
                     message_history.append(
