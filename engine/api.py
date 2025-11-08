@@ -1,398 +1,283 @@
-"""Internal Python API for Codenames game operations."""
+#!/usr/bin/env python3
+"""Flask API server for Codenames game."""
 
-import re
-from typing import Optional, List
-from uuid import uuid4
-from pydantic import BaseModel, Field
+import json
+import time
+from typing import Dict
+from flask import Flask, request, jsonify, Response, stream_with_context
+from flask_cors import CORS
 
-from engine.boards.builder import generate_board, SupportedLanguage
-from engine.game.state import GameState, new_game_state, Score
-from engine.game.move import Hint, Guess, GivenHint, GivenGuess, PASS_GUESS, QUIT_GAME
-from engine.game.player import PlayerRole
-from engine.game.color import TeamColor, CardColor
-from engine.game.card import Card
-from engine.game.winner import Winner
-from engine.game.board import Board
-from engine.game.exceptions import CardNotFoundError
+from engine.game import CodenamesGame
+from engine.schema import ReasoningToken, ReasoningTokenType
+
+app = Flask(__name__)
+CORS(app)  # Enable CORS for frontend
+
+# In-memory storage for games
+games: Dict[str, CodenamesGame] = {}
 
 
-# ===== Utility Functions =====
+@app.route("/", methods=["GET"])
+def health_check():
+    """Health check endpoint."""
+    return jsonify({
+        "name": "Codenames API",
+        "version": "1.0.0",
+        "active_games": len(games)
+    })
 
-def sanitize_word(word: str) -> str:
+
+@app.route("/games", methods=["POST"])
+def create_game():
     """
-    Sanitize a word to only contain lowercase English letters and spaces.
+    Create a new game.
 
-    Args:
-        word: The word to sanitize
-
-    Returns:
-        Sanitized word (lowercase, only letters and spaces)
-
-    Raises:
-        ValueError: If word contains invalid characters
+    Body (optional):
+        {
+            "language": "english",
+            "board_size": 25,
+            "seed": null
+        }
     """
-    # Remove leading/trailing whitespace
-    word = word.strip()
+    data = request.get_json() or {}
 
-    # Check if word only contains letters and spaces
-    if not re.match(r'^[a-zA-Z\s]+$', word):
-        raise ValueError(f"Word must only contain English letters and spaces: '{word}'")
+    language = data.get("language", "english")
+    board_size = data.get("board_size", 25)
+    seed = data.get("seed")
 
-    # Convert to lowercase and normalize spaces
-    word = word.lower()
-    word = re.sub(r'\s+', ' ', word)  # Replace multiple spaces with single space
+    try:
+        game = CodenamesGame(language=language, board_size=board_size, seed=seed)
+        games[game.game_id] = game
 
-    return word
-
-
-# ===== Response Schemas =====
-
-class CardWithIndex(BaseModel):
-    """Card with its board index."""
-    index: int
-    word: str
-    color: Optional[CardColor]
-    revealed: bool
-
-    class Config:
-        use_enum_values = True
+        return jsonify({
+            "game_id": game.game_id,
+            "message": "Game created successfully"
+        }), 201
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
 
-class TurnInfo(BaseModel):
-    """Information about current turn."""
-    team: TeamColor
-    role: PlayerRole
-    left_guesses: int
+# Add hint history
+@app.route("/games/<game_id>", methods=["GET"])
+def get_game_state(game_id: str):
+    """
+    Get full game state.
 
-    class Config:
-        use_enum_values = True
+    Query params:
+        show_colors: true/false (default: false) - show all card colors
+    """
+    if game_id not in games:
+        return jsonify({"error": "Game not found"}), 404
 
+    game = games[game_id]
+    show_colors = request.args.get("show_colors", "false").lower() == "true"
 
-class HintResult(BaseModel):
-    """Result of giving a hint."""
-    success: bool
-    hint: Optional[GivenHint] = None
-    left_guesses: int = 0
-    reason: Optional[str] = None
-
-    class Config:
-        use_enum_values = True
+    state = game.get_state(show_colors=show_colors)
+    return jsonify(state.dict())
 
 
-class GuessResult(BaseModel):
-    """Result of making a guess."""
-    success: bool
-    guessed_card: Optional[Card] = None
-    correct: Optional[bool] = None
-    left_guesses: int = 0
-    is_game_over: bool = False
-    winner: Optional[Winner] = None
-    reason: Optional[str] = None
+@app.route("/games/<game_id>/hint", methods=["POST"])
+def give_hint(game_id: str):
+    """
+    Give a hint (Spymaster action).
 
-    class Config:
-        use_enum_values = True
+    Body:
+        {
+            "word": "ocean",
+            "card_amount": 2
+        }
+    """
+    if game_id not in games:
+        return jsonify({"error": "Game not found"}), 404
 
+    game = games[game_id]
+    data = request.get_json()
 
-class PassResult(BaseModel):
-    """Result of passing turn."""
-    success: bool
-    action: str
-    next_team: TeamColor
+    if not data or "word" not in data or "card_amount" not in data:
+        return jsonify({"error": "Missing required fields: word, card_amount"}), 400
 
-    class Config:
-        use_enum_values = True
-
-
-class GameStateResponse(BaseModel):
-    """Complete game state."""
-    game_id: str
-    board: List[CardWithIndex]
-    score: Score
-    current_turn: TurnInfo
-    hints: List[GivenHint]
-    last_hint: Optional[GivenHint]
-    is_game_over: bool
-    winner: Optional[Winner]
-    board_size: int
-
-    class Config:
-        use_enum_values = True
+    try:
+        result = game.give_hint(data["word"], data["card_amount"])
+        return jsonify(result.dict())
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
 
 
-# ===== Main API =====
+@app.route("/games/<game_id>/guess", methods=["POST"])
+def make_guess(game_id: str):
+    """
+    Make a guess (Operative action).
 
-class CodenamesGame:
-    """Main API interface for a Codenames game."""
+    Body:
+        {
+            "word": "ocean"
+        }
+    """
+    if game_id not in games:
+        return jsonify({"error": "Game not found"}), 404
 
-    def __init__(self, language: str = "english", board_size: int = 25, seed: Optional[int] = None):
-        """
-        Create a new Codenames game.
+    game = games[game_id]
+    data = request.get_json()
 
-        Args:
-            language: Board language ("english" or "hebrew")
-            board_size: Number of cards (default 25)
-            seed: Random seed for reproducibility
-        """
-        self.game_id = str(uuid4())
-        board = generate_board(
-            language=SupportedLanguage.ENGLISH,
-            board_size=board_size,
-            seed=seed
-        )
-        self.state = new_game_state(board=board)
+    if not data or "word" not in data:
+        return jsonify({"error": "Missing required field: word"}), 400
 
-    # ===== Game State Queries =====
+    try:
+        result = game.make_guess(data["word"])
+        return jsonify(result.dict())
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
 
-    def get_board(self, show_colors: bool = False) -> List[CardWithIndex]:
-        """
-        Get all cards on the board.
 
-        Args:
-            show_colors: If True, show all colors (spymaster view).
-                        If False, only show revealed cards (operative view).
+@app.route("/games/<game_id>/pass", methods=["POST"])
+def pass_turn(game_id: str):
+    """Pass the turn (Operative action)."""
+    if game_id not in games:
+        return jsonify({"error": "Game not found"}), 404
 
-        Returns:
-            List of cards with indices
-        """
-        board = self.state.board if show_colors else self.state.board.censored
-        return [
-            CardWithIndex(
-                index=i,
-                word=card.word,
-                color=card.color,
-                revealed=card.revealed
+    game = games[game_id]
+
+    try:
+        result = game.pass_turn()
+        return jsonify(result.dict())
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/games/<game_id>/ai/hint", methods=["POST"])
+def ai_give_hint(game_id: str):
+    """
+    AI generates and gives a hint (Spymaster action) with streaming.
+
+    Body: {} (optional AI config)
+
+    Response: Server-Sent Events stream of ReasoningToken objects
+        ReasoningToken = {
+            "type": "give-hint-reasoning" | "give-hint-result" | "error",
+            "content": str | HintResult
+        }
+
+        Example reasoning token: {"type": "give-hint-reasoning", "content": "Analyzing board..."}
+        Example result token: {"type": "give-hint-result", "content": {...HintResult...}}
+    """
+    if game_id not in games:
+        return jsonify({"error": "Game not found"}), 404
+
+    game = games[game_id]
+
+    def generate():
+        # TODO: Replace with actual AI agent function that yields ReasoningTokens
+        # For now, simulate reasoning tokens
+        token1 = ReasoningToken(type=ReasoningTokenType.GIVE_HINT_REASONING, content="Analyzing board...")
+        yield json.dumps(token1.dict()) + "\n\n"
+        time.sleep(0.5)
+
+        token2 = ReasoningToken(type=ReasoningTokenType.GIVE_HINT_REASONING, content="Identifying patterns...")
+        yield json.dumps(token2.dict()) + "\n\n"
+        time.sleep(0.5)
+
+        token3 = ReasoningToken(type=ReasoningTokenType.GIVE_HINT_REASONING, content="Generating hint...")
+        yield json.dumps(token3.dict()) + "\n\n"
+        time.sleep(0.5)
+
+        # Placeholder: Generate hint
+        word = "placeholder"
+        card_amount = 2
+
+        # Apply hint to game
+        try:
+            result = game.give_hint(word, card_amount)
+            result_token = ReasoningToken(
+                type=ReasoningTokenType.GIVE_HINT_RESULT,
+                content=result.dict()
             )
-            for i, card in enumerate(board.cards)
-        ]
-
-    def get_card(self, index: int, show_color: bool = False) -> CardWithIndex:
-        """
-        Get a specific card by index.
-
-        Args:
-            index: Card index (0 to board_size-1)
-            show_color: Whether to show the card's color
-
-        Returns:
-            Card with index
-        """
-        if index < 0 or index >= len(self.state.board.cards):
-            raise ValueError(f"Invalid card index: {index}")
-
-        card = self.state.board.cards[index]
-        if not show_color and not card.revealed:
-            card = card.censored
-
-        return CardWithIndex(
-            index=index,
-            word=card.word,
-            color=card.color,
-            revealed=card.revealed
-        )
-
-    def get_score(self) -> Score:
-        """
-        Get current game score.
-
-        Returns:
-            Score with blue/red team scores
-        """
-        return self.state.score
-
-    def get_current_turn(self) -> TurnInfo:
-        """
-        Get information about whose turn it is.
-
-        Returns:
-            Current turn info
-        """
-        return TurnInfo(
-            team=self.state.current_team_color,
-            role=self.state.current_player_role,
-            left_guesses=self.state.left_guesses
-        )
-
-    def get_hints(self) -> List[GivenHint]:
-        """
-        Get all hints given so far.
-
-        Returns:
-            List of given hints
-        """
-        return self.state.given_hints
-
-    def get_last_hint(self) -> Optional[GivenHint]:
-        """Get the most recent hint, or None if no hints given."""
-        if not self.state.given_hints:
-            return None
-        return self.state.given_hints[-1]
-
-    def is_game_over(self) -> bool:
-        """Check if the game has ended."""
-        return self.state.is_game_over
-
-    def get_winner(self) -> Optional[Winner]:
-        """
-        Get the winner if game is over.
-
-        Returns:
-            Winner info or None if game not over
-        """
-        return self.state.winner
-
-    def get_state(self, show_colors: bool = False) -> GameStateResponse:
-        """
-        Get complete game state in one call.
-
-        Args:
-            show_colors: If True, show all card colors (spymaster view).
-                        If False, only show revealed cards (operative view).
-
-        Returns:
-            Complete game state
-        """
-        return GameStateResponse(
-            game_id=self.game_id,
-            board=self.get_board(show_colors=show_colors),
-            score=self.get_score(),
-            current_turn=self.get_current_turn(),
-            hints=self.get_hints(),
-            last_hint=self.get_last_hint(),
-            is_game_over=self.is_game_over(),
-            winner=self.get_winner(),
-            board_size=len(self.state.board.cards)
-        )
-
-    # ===== Game Actions =====
-
-    def give_hint(self, word: str, card_amount: int) -> HintResult:
-        """
-        Give a hint (spymaster action).
-
-        Args:
-            word: The hint word
-            card_amount: Number of cards the hint refers to
-
-        Returns:
-            Hint result
-
-        Raises:
-            ValueError if not hinter's turn or invalid hint
-        """
-        if self.state.current_player_role != PlayerRole.HINTER:
-            raise ValueError("Not the hinter's turn")
-
-        hint = Hint(word=word, card_amount=card_amount)
-        given_hint = self.state.process_hint(hint)
-
-        if given_hint is None:
-            return HintResult(success=False, reason="quit")
-
-        return HintResult(
-            success=True,
-            hint=given_hint,
-            left_guesses=self.state.left_guesses
-        )
-
-    def make_guess(self, word: str) -> GuessResult:
-        """
-        Make a guess (operative action).
-
-        Args:
-            word: The word on the card to guess
-
-        Returns:
-            Guess result including whether guess was correct
-
-        Raises:
-            ValueError: If not guesser's turn, word not on board, or invalid word format
-        """
-        if self.state.current_player_role != PlayerRole.GUESSER:
-            raise ValueError("Not the guesser's turn")
-
-        # Sanitize the word
-        try:
-            sanitized_word = sanitize_word(word)
+            yield json.dumps(result_token.dict()) + "\n\n"
         except ValueError as e:
-            raise ValueError(f"Invalid word format: {e}")
+            error_token = ReasoningToken(type=ReasoningTokenType.ERROR, content=str(e))
+            yield json.dumps(error_token.dict()) + "\n\n"
 
-        # Find the card index
-        try:
-            card_index = self.state.board.find_card_index(sanitized_word)
-        except CardNotFoundError:
-            raise ValueError(f"Word '{word}' is not on the board")
+    return Response(
+        stream_with_context(generate()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no'
+        }
+    )
 
-        # Make the guess
-        guess = Guess(card_index=card_index)
-        given_guess = self.state.process_guess(guess)
 
-        if given_guess is None:
-            return GuessResult(success=False, reason="pass or quit")
+@app.route("/games/<game_id>/ai/guess", methods=["POST"])
+def ai_make_guess(game_id: str):
+    """
+    AI generates and makes a guess (Operative action) with streaming.
 
-        return GuessResult(
-            success=True,
-            guessed_card=given_guess.guessed_card,
-            correct=given_guess.correct,
-            left_guesses=self.state.left_guesses,
-            is_game_over=self.state.is_game_over,
-            winner=self.get_winner()
-        )
+    Body: {} (optional AI config)
 
-    def pass_turn(self) -> PassResult:
-        """
-        Pass the turn (operative decides to stop guessing).
+    Response: Server-Sent Events stream of ReasoningToken objects
+        ReasoningToken = {
+            "type": "make-guess-reasoning" | "make-guess-result" | "error",
+            "content": str | GuessResult
+        }
 
-        Returns:
-            Pass result
-        """
-        if self.state.current_player_role != PlayerRole.GUESSER:
-            raise ValueError("Can only pass during guesser's turn")
+        Example reasoning token: {"type": "make-guess-reasoning", "content": "Evaluating cards..."}
+        Example result token: {"type": "make-guess-result", "content": {...GuessResult...}}
+    """
+    if game_id not in games:
+        return jsonify({"error": "Game not found"}), 404
 
-        guess = Guess(card_index=PASS_GUESS)
-        self.state.process_guess(guess)
+    game = games[game_id]
 
-        return PassResult(
-            success=True,
-            action="passed",
-            next_team=self.state.current_team_color
-        )
+    def generate():
+        # TODO: Replace with actual AI agent function that yields ReasoningTokens
+        # For now, simulate reasoning tokens
+        token1 = ReasoningToken(type=ReasoningTokenType.MAKE_GUESS_REASONING, content="Processing hint...")
+        yield f"data: {json.dumps(token1.dict())}\n\n"
+        time.sleep(0.5)
 
-    # ===== Utility Methods =====
+        token2 = ReasoningToken(type=ReasoningTokenType.MAKE_GUESS_REASONING, content="Evaluating cards...")
+        yield f"data: {json.dumps(token2.dict())}\n\n"
+        time.sleep(0.5)
 
-    def get_unrevealed_cards(self, color: Optional[str] = None) -> List[Card]:
-        """
-        Get all unrevealed cards, optionally filtered by color.
+        token3 = ReasoningToken(type=ReasoningTokenType.MAKE_GUESS_REASONING, content="Making decision...")
+        yield f"data: {json.dumps(token3.dict())}\n\n"
+        time.sleep(0.5)
 
-        Args:
-            color: Optional color filter ("RED", "BLUE", "GRAY", "BLACK")
+        # Placeholder: Pick first unrevealed card
+        board = game.get_board(show_colors=False)
+        unrevealed = [card for card in board if not card.revealed]
 
-        Returns:
-            List of unrevealed cards
-        """
-        cards = self.state.board.unrevealed_cards
-        if color:
-            card_color = CardColor[color.upper()]
-            cards = tuple(c for c in cards if c.color == card_color)
+        guess_word = unrevealed[0].word if unrevealed else None
 
-        return list(cards)
+        if guess_word:
+            # Apply guess to game
+            try:
+                result = game.make_guess(guess_word)
+                result_token = ReasoningToken(
+                    type=ReasoningTokenType.MAKE_GUESS_RESULT,
+                    content=result.dict()
+                )
+                yield f"data: {json.dumps(result_token.dict())}\n\n"
+            except ValueError as e:
+                error_token = ReasoningToken(type=ReasoningTokenType.ERROR, content=str(e))
+                yield f"data: {json.dumps(error_token.dict())}\n\n"
+        else:
+            # Pass if no cards left
+            try:
+                result = game.pass_turn()
+                result_token = ReasoningToken(
+                    type=ReasoningTokenType.MAKE_GUESS_RESULT,
+                    content=result.dict()
+                )
+                yield f"data: {json.dumps(result_token.dict())}\n\n"
+            except ValueError as e:
+                error_token = ReasoningToken(type=ReasoningTokenType.ERROR, content=str(e))
+                yield f"data: {json.dumps(error_token.dict())}\n\n"
 
-    def get_revealed_cards(self, color: Optional[str] = None) -> List[Card]:
-        """
-        Get all revealed cards, optionally filtered by color.
-
-        Args:
-            color: Optional color filter ("RED", "BLUE", "GRAY", "BLACK")
-
-        Returns:
-            List of revealed cards
-        """
-        cards = self.state.board.revealed_cards
-        if color:
-            card_color = CardColor[color.upper()]
-            cards = tuple(c for c in cards if c.color == card_color)
-
-        return list(cards)
-
-    def __repr__(self) -> str:
-        turn = self.get_current_turn()
-        return f"CodenamesGame(id={self.game_id[:8]}, turn={turn.team}/{turn.role})"
+    return Response(
+        stream_with_context(generate()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no'
+        }
+    )

@@ -1,0 +1,4 @@
+codenames
+flask
+flask-cors
+pydantic
