@@ -56,3 +56,29 @@ class TalkTool(Tool):
             "type": "talk",
             "message": arguments.message,
         }
+
+
+class PassArguments(BaseModel):
+    pass
+
+
+class PassTool(Tool):
+    """Tool for the agent to pass the turn (stop guessing)."""
+
+    Arguments = PassArguments
+
+    @property
+    def name(self) -> str:
+        return "pass_tool"
+
+    @property
+    def description(self) -> str:
+        return "Pass the turn if the team does not want to make any more guesses."
+
+    def execute(self, arguments: PassArguments) -> dict:
+        """
+        Request to pass the turn (stop guessing).
+        """
+        return {
+            "type": "pass",
+        }
