@@ -81,7 +81,7 @@ class OperativeAgent:
 
     def run(
         self, user_message: str, message_history: List[Dict[str, str]]
-    ) -> dict[str, str]:
+    ) -> tuple[Dict[str, str], Dict[str, Any]]:
         """
         Given past messages in the history, and the state of the board (inside of user message),
         Either say something to rest of the models,
@@ -116,6 +116,8 @@ class OperativeAgent:
             }
             if "tool_calls" in choice and choice["tool_calls"]:
                 assistant_msg["tool_calls"] = choice["tool_calls"]
+            if "reasoning_content" in choice and choice["reasoning_content"]:
+                assistant_msg["reasoning_content"] = choice["reasoning_content"]
             messages.append(assistant_msg)
 
             # Handle tool calls if any
@@ -138,7 +140,7 @@ class OperativeAgent:
                         "vote",
                         "talk",
                     }:
-                        return result
+                        return result, assistant_msg
 
                     # Otherwise, feed the tool result back into the conversation and continue
                     messages.append(
@@ -186,4 +188,4 @@ class OperativeAgent:
         return {
             "type": "talk",
             "message": "Unable to proceed: no tool call produced.",
-        }
+        }, assistant_msg
