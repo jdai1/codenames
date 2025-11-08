@@ -146,13 +146,18 @@ def guesser_turn(
             print(f"Clue: {last_hint.word.upper()} {last_hint.card_amount}")
             for agent in ops:
                 user_msg = OPERATIVE_USER_PROMPT.format(
+                    team=_name(team_turn),
                     board=board_str,
-                    clue=f"{last_hint.word} {last_hint.card_amount}",
+                    clue=last_hint.word,
                     number=last_hint.card_amount,
+                    left_guesses=game.get_current_turn().left_guesses,
                     votes=", ".join(votes_accumulated)
                     if votes_accumulated
                     else "(none)",
                 )
+
+                print(f"Operative user message: {user_msg}")
+
                 result, assistant_msg, _, _ = agent.run(
                     user_message=user_msg, message_history=message_history
                 )
