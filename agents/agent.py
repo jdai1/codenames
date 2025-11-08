@@ -52,12 +52,15 @@ class Agent:
         token_usage = 0
         # Iteratively allow the model to call tools and react
         for _ in range(max(1, self.max_iterations)):
+            print(f"Messages: {messages}")
+            print(f"Tool list: {tool_list}")
             resp = completion(
                 model=self.model,
                 messages=messages,
                 tools=tool_list if tool_list else None,
-                tool_choice="required" if tool_list else None,
+                tool_choice="auto" if tool_list else None,
             )
+            print(f"Response: {resp}")
             model_cost = completion_cost(completion_response=resp)
             token_usage = token_counter(model=self.model, messages=messages)
             choice = resp["choices"][0]["message"]
@@ -65,7 +68,7 @@ class Agent:
             # Append assistant message to conversation
             assistant_msg: Dict[str, Any] = {
                 "role": "assistant",
-                "content": choice.get("content"),
+                "content": choice.get("content") or "",
             }
             if "tool_calls" in choice and choice["tool_calls"]:
                 assistant_msg["tool_calls"] = choice["tool_calls"]
