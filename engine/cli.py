@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Simple CLI for Codenames game."""
 
-from engine.game import CodenamesGame
+from engine.game_main import CodenamesGame
 
 
 def print_board(game, show_colors=False):
@@ -15,7 +15,7 @@ def print_board(game, show_colors=False):
 
     # Print board in a grid format (5x5)
     for i in range(0, len(board), 5):
-        row = board[i:i+5]
+        row = board[i : i + 5]
         for card in row:
             color_emoji = ""
             if card.color:
@@ -30,8 +30,10 @@ def print_board(game, show_colors=False):
 def print_score(game):
     """Print the current score."""
     score = game.get_score()
-    print(f"Score - Blue: {score.blue.revealed}/{score.blue.total} | "
-          f"Red: {score.red.revealed}/{score.red.total}")
+    print(
+        f"Score - Blue: {score.blue.revealed}/{score.blue.total} | "
+        f"Red: {score.red.revealed}/{score.red.total}"
+    )
     print()
 
 
@@ -55,7 +57,7 @@ def get_guess(game):
 
     guess_input = input("  > ").strip()
 
-    if guess_input.lower() == 'pass':
+    if guess_input.lower() == "pass":
         return None
 
     return guess_input
@@ -121,7 +123,9 @@ def main():
 
                     if result.success:
                         card = result.guessed_card
-                        correct_marker = "✓ Correct!" if result.correct else "✗ Wrong team!"
+                        correct_marker = (
+                            "✓ Correct!" if result.correct else "✗ Wrong team!"
+                        )
                         print(f"\nRevealed: {card.word} - {card.color}")
                         print(f"Result: {correct_marker}")
                         print_score(game)
