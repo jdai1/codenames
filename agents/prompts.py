@@ -22,14 +22,15 @@ You will continuously converse with other operatives until you vote for the same
 """
 
 OPERATIVE_USER_PROMPT = """
+You are on the {team} team.
+
 The current state of the board is:
 {board}
 
-The current clue is:
-{clue}
+The current clue is: {clue}, with {number} words on the board that relate to it.
 
-The number of words you need to guess for this clue is:
-{number}
+The number of guesses you have left (including the extra guess) is:
+{left_guesses}
 
 The other Operatives have voted for the following words:
 {votes}
