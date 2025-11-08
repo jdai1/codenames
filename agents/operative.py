@@ -1,50 +1,39 @@
 from typing import List, Dict, Any
 import json
 from openai import OpenAI
+from agents.tool import Tool
+import logging
+from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 
-class VoteTool:
-    def to_openai_tool(self) -> dict[str, Any]:
-        return {
-            "type": "function",
-            "function": {
-                "name": "vote_tool",
-                "description": "Vote for the upcoming guess"
-                + "If a majority of models have voted for the same word,"
-                + "the team will have selected this word in the game engine",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "vote": {
-                            "type": "string",
-                            "description": "The word to vote for in the upcoming turn",
-                        },
-                    },
-                    "required": ["vote"],
-                },
-            },
-        }
+class VoteArguments(BaseModel):
+    word: str
 
-    def execute(self, vote: str) -> Dict[str, Any]:
+
+class VoteTool(Tool):
+    """Tool for the agent to vote for the next guess"""
+
+    Arguments = VoteArguments
+
+    @property
+    def name(self) -> str:
+        return "vote_tool"
+
+    @property
+    def description(self) -> str:
+        return "Vote for the next guess. "
+
+    def execute(self, arguments: VoteArguments) -> dict:
         """
-        Execute the vote tool with the given vote.
-
-        Args:
-            vote: The word that the operative is voting for
-
-        Returns:
-            Dictionary containing the vote result
+        Vote for the next guess.
+        If a majority of models have voted for the same word,
+        the team will have selected this word in the game engine
         """
-        if not vote:
-            return {
-                "success": False,
-                "error": "No vote provided. Please vote for a word.",
-            }
-
         return {
-            "success": True,
-            "vote": vote,
-            "message": f"Successfully voted for: {vote}",
+            "type": "vote",
+            "word": arguments.word,
         }
 
 
