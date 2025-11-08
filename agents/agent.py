@@ -52,15 +52,12 @@ class Agent:
         token_usage = 0
         # Iteratively allow the model to call tools and react
         for _ in range(max(1, self.max_iterations)):
-            print(f"Messages: {messages}")
-            print(f"Tool list: {tool_list}")
             resp = completion(
                 model=self.model,
                 messages=messages,
                 tools=tool_list if tool_list else None,
                 tool_choice="auto" if tool_list else None,
             )
-            print(f"Response: {resp}")
             model_cost = completion_cost(completion_response=resp)
             token_usage = token_counter(model=self.model, messages=messages)
             choice = resp["choices"][0]["message"]
@@ -95,6 +92,7 @@ class Agent:
                     if isinstance(result, dict) and result.get("type") in {
                         "vote",
                         "talk",
+                        "hint",
                     }:
                         return result, assistant_msg, model_cost, token_usage
 
@@ -143,7 +141,7 @@ class Agent:
         # Max iterations reached without a decisive action
         try:
             model_cost = completion_cost(completion_response=resp)
-            token_usage = token_counter(model=self.model, messages=resp)
+            token_usage = token_counter(model=self.model, messages=messages)
         except Exception as e:
             logger.warning(f"Error calculating completion cost: {e}")
         return (
