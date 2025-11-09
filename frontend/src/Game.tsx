@@ -1515,7 +1515,7 @@ function Card({
 
   return (
     <div
-      className={`${baseClasses} ${clickableClasses} ${disabledClasses} ${opacityClasses} p-8 flex flex-col justify-between items-stretch card-label gap-4 ${
+      className={`${baseClasses} ${clickableClasses} ${disabledClasses} ${opacityClasses} p-4 flex flex-col justify-between items-stretch card-label gap-4 ${
         label.length > 10 ? 'text-[1.5vw]' : 'text-[1.75vw]'
       } border-8`}
       onClick={clickable && !revealed && onClick ? onClick : undefined}
@@ -1524,24 +1524,16 @@ function Card({
         {(revealed || spymasterView) && (
           <span className='flex justify-center mb-2'>
             {type === 'RED' && (
-              <img src={'/red.svg'} alt='Red' className='h-[2vh] w-[2vw]' />
+              <img src={'/red.svg'} alt='Red' className='h-14 w-14' />
             )}
             {type === 'BLUE' && (
-              <img src={'/blue.svg'} alt='Blue' className='h-[2vh] w-[2vw]' />
+              <img src={'/blue.svg'} alt='Blue' className='h-14 w-14' />
             )}
             {type === 'ASSASSIN' && (
-              <img
-                src={'/assassin.svg'}
-                alt='Assassin'
-                className='h-[2vh] w-[2vw]'
-              />
+              <img src={'/assassin.svg'} alt='Assassin' className='h-14 w-14' />
             )}
             {type === 'NEUTRAL' && (
-              <img
-                src={'/innocent.svg'}
-                alt='Neutral'
-                className='h-[2vh] w-[2vw]'
-              />
+              <img src={'/innocent.svg'} alt='Neutral' className='h-14 w-14' />
             )}
           </span>
         )}
