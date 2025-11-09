@@ -8,6 +8,6 @@ dependencies = [
     "beautifultable>=1.1.0",
     "flask>=3.1.2",
     "flask-cors>=6.0.1",
-    "litellm>=1.79.1",
+    "litellm>=1.74.1",
     "pydantic>=2.12.4",
 ]
