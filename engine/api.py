@@ -274,24 +274,22 @@ def ai_make_guess(game_id: str):
             # It now yields events as they happen
             for event in guesser_turn(game, operatives, message_history, max_rounds=25):
                 # Send event as SSE
-                yield json.dumps(event.dict())
+                yield "data: " + json.dumps(event.dict()) + "\n\n"
 
             # Send final completion event
-            yield json.dumps({
+            yield "data: " + json.dumps({
                 "type": "complete",
                 "current_turn": {
                     "team": _name(game.state.current_team_color),
                     "role": game.state.current_player_role.value,
                 },
                 "is_game_over": game.is_game_over(),
-            })
+            }) + "\n\n"
 
         except ValueError as e:
-            error_data = json.dumps({"type": "error", "error": str(e)})
-            yield f"data: {error_data}\n\n"
-        except Exception as e:
-            error_data = json.dumps({"type": "error", "error": f"Internal error: {str(e)}"})
-            yield f"data: {error_data}\n\n"
+            yield "data: " + json.dumps({"type": "error", "error": str(e)}) + "\n\n"
+        except Exception as e:  
+            yield "data: " + json.dumps({"type": "error", "error": f"Internal error: {str(e)}"}) + "\n\n"
 
     return Response(
         stream_with_context(generate()),
