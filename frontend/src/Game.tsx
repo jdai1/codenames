@@ -805,13 +805,25 @@ function Game() {
           </div>
 
           <button
-            className='rounded bg-amber-400 hover:bg-amber-500 transition-colors px-4 py-1.5 text-md font-medium'
+            className={`rounded px-4 py-1.5 text-md transition-colors ${
+              gameId
+                ? 'bg-gray-300 hover:bg-gray-400 text-black font-normal'
+                : 'bg-amber-400 hover:bg-amber-500 font-medium'
+            }`}
             onClick={() => {
-              createNewGame.mutate()
+              if (gameId) {
+                setGameId(null)
+              } else {
+                createNewGame.mutate()
+              }
             }}
             disabled={createNewGame.isPending}
           >
-            {createNewGame.isPending ? 'Creating...' : 'Start'}
+            {createNewGame.isPending
+              ? 'Creating...'
+              : gameId
+              ? 'Cancel'
+              : 'Start'}
           </button>
 
           <div className='flex items-center gap-3'>
@@ -850,17 +862,41 @@ function Game() {
 
         {gameState && (
           <div className='flex items-center justify-center mt-2'>
-            <div className='text-lg text-gray-600'>
+            <div className='text-xl'>
               {gameState.is_game_over && gameState.winner ? (
-                <span className='font-semibold text-green-600'>
-                  🎉 {gameState.winner.team_color} wins -{' '}
-                  {gameState.winner.reason}
-                </span>
+                <div className='flex items-center gap-2'>
+                  <span
+                    className={`font-extrabold tracking-wide ${
+                      gameState.winner.team_color === 'RED'
+                        ? 'text-red-600'
+                        : 'text-cyan-700'
+                    }`}
+                  >
+                    {gameState.winner.team_color} WINS
+                  </span>
+                  <span className='text-gray-600 font-medium text-base'>
+                    • {gameState.winner.reason}
+                  </span>
+                </div>
               ) : (
                 <>
-                  {gameState.current_turn.team} {gameState.current_turn.role}
-                  {gameState.current_turn.role === 'GUESSER' &&
-                    ` (${gameState.current_turn.left_guesses} left)`}
+                  <span
+                    className={`font-extrabold tracking-wide ${
+                      gameState.current_turn.team === 'RED'
+                        ? 'text-red-600'
+                        : 'text-cyan-700'
+                    }`}
+                  >
+                    {gameState.current_turn.role === 'HINTER'
+                      ? 'SPYMASTER'
+                      : 'OPERATIVE'}
+                  </span>
+                  {gameState.current_turn.role === 'GUESSER' && (
+                    <span className='text-gray-600 font-medium'>
+                      {' '}
+                      ({gameState.current_turn.left_guesses} left)
+                    </span>
+                  )}
                 </>
               )}
             </div>
@@ -886,11 +922,7 @@ function Game() {
               aiLoading={aiLoading}
             />
           </div>
-          <div
-            className={`col-span-3 ${
-              gameState.current_turn.team === 'RED' ? 'bg-red-50' : 'bg-cyan-50'
-            } p-4 overflow-scroll`}
-          >
+          <div className='col-span-3 bg-white p-4 overflow-scroll'>
             <div className='grid gap-2 grid-cols-5 grid-rows-5 h-full'>
               {gameState.board.map((card) => {
                 const isGuesserTurn = gameState.current_turn.role === 'GUESSER'
@@ -921,7 +953,7 @@ function Game() {
               })}
             </div>
           </div>
-          <div className='col-span-1 bg-gray-100 overflow-scroll'>
+          <div className='col-span-1 bg-white overflow-scroll'>
             <ChatHistory
               team='BLUE'
               gameState={gameState}
@@ -1179,7 +1211,7 @@ function ChatHistory({
   ])
 
   return (
-    <div className='p-4 flex flex-col h-full gap-4'>
+    <div className='p-4 flex flex-col h-full gap-3'>
       <HeaderWithLogo
         team={team}
         gameType={gameType}
@@ -1188,7 +1220,7 @@ function ChatHistory({
 
       <div
         ref={chatHistoryRef}
-        className='border border-gray-300 p-2 grow h-full flex flex-col gap-2 overflow-y-auto'
+        className='rounded-xl bg-white shadow-sm border border-gray-200/50 p-3 grow h-full flex flex-col gap-2.5 overflow-y-auto'
       >
         {gameState.event_history &&
           (team === 'RED'
@@ -1199,29 +1231,43 @@ function ChatHistory({
               return (
                 <div
                   key={`event-${idx}`}
-                  className={`p-2 rounded ${
-                    team === 'RED' ? 'bg-red-100' : 'bg-cyan-100'
+                  className={`px-3 py-2.5 rounded-lg shadow-sm ${
+                    team === 'RED'
+                      ? 'bg-gradient-to-br from-red-100 to-red-200/80 border border-red-300/70'
+                      : 'bg-gradient-to-br from-cyan-100 to-cyan-200/80 border border-cyan-300/70'
                   }`}
                 >
-                  Hint: {event.hint.word} {event.hint.card_amount}
+                  <span className='font-semibold text-sm'>Hint:</span>{' '}
+                  <span className='font-bold'>{event.hint.word}</span>{' '}
+                  <span className='text-sm'>({event.hint.card_amount})</span>
                 </div>
               )
             } else if (event.event_type === 'guess_made' && event.guess) {
               // this is correct, do not change
-              const correctText = event.correct ? '✓ Correct' : '✗ Wrong'
+              const isCorrect = event.correct
               return (
                 <div
                   key={`event-${idx}`}
-                  className='p-2 rounded bg-gray-50 text-sm'
+                  className={`px-3 py-2 rounded-lg text-sm shadow-sm border ${
+                    isCorrect
+                      ? 'bg-gradient-to-br from-green-100 to-green-200/70 border-green-300/70'
+                      : 'bg-gradient-to-br from-gray-50 to-gray-100/50 border-gray-200/50'
+                  }`}
                 >
-                  Guessed: {event.guess.guessed_card.word} - {correctText}
+                  <span className='text-gray-700'>Guessed:</span>{' '}
+                  <span className='font-semibold'>
+                    {event.guess.guessed_card.word}
+                  </span>{' '}
+                  <span className={isCorrect ? 'text-green-700 font-semibold' : 'text-red-600'}>
+                    {isCorrect ? '✓ Correct' : '✗ Wrong'}
+                  </span>
                 </div>
               )
             } else if (event.event_type === 'turn_passed') {
               return (
                 <div
                   key={`event-${idx}`}
-                  className='p-2 rounded bg-gray-50 text-sm'
+                  className='px-3 py-2 rounded-lg bg-gradient-to-br from-gray-50 to-gray-100/50 border border-gray-200/50 text-sm text-gray-600 italic shadow-sm'
                 >
                   Passed turn
                 </div>
@@ -1230,9 +1276,12 @@ function ChatHistory({
               return (
                 <div
                   key={`event-${idx}`}
-                  className='p-2 rounded bg-cyan-100 text-sm italic'
+                  className='px-3 py-2 rounded-lg bg-gradient-to-br from-blue-100 to-blue-200/70 border border-blue-300/70 text-sm italic shadow-sm'
                 >
-                  {formatActorName(event.actor.name)}: {event.message}
+                  <span className='font-semibold not-italic text-blue-900'>
+                    {formatActorName(event.actor.name)}:
+                  </span>{' '}
+                  {event.message}
                 </div>
               )
             } else if (
@@ -1252,12 +1301,14 @@ function ChatHistory({
               return (
                 <div
                   key={`event-${idx}`}
-                  className='p-2 rounded bg-purple-50 text-sm italic'
+                  className='px-3 py-2.5 rounded-lg bg-gradient-to-br from-purple-50/40 to-gray-100/50 border border-purple-200/30 text-sm italic shadow-sm'
                 >
-                  <div className='font-semibold not-italic mb-1'>
+                  <div className='font-semibold not-italic mb-1.5 text-purple-700/70'>
                     {formatActorName(event.actor.name)}:
                   </div>
-                  <div className='whitespace-pre-wrap'>{displayMessage}</div>
+                  <div className='whitespace-pre-wrap text-gray-600'>
+                    {displayMessage}
+                  </div>
                   {hasMoreContent && (
                     <button
                       onClick={() => {
@@ -1271,9 +1322,9 @@ function ChatHistory({
                           return next
                         })
                       }}
-                      className='mt-1 text-xs text-purple-600 hover:text-purple-800 underline'
+                      className='mt-1.5 text-xs text-purple-500/70 hover:text-purple-700 font-medium transition-colors'
                     >
-                      {isExpanded ? 'Show less' : 'Show more'}
+                      {isExpanded ? '▲ Show less' : '▼ Show more'}
                     </button>
                   )}
                 </div>
@@ -1286,9 +1337,12 @@ function ChatHistory({
               return (
                 <div
                   key={`event-${idx}`}
-                  className='p-2 rounded bg-yellow-50 text-sm italic'
+                  className='px-3 py-2 rounded-lg bg-gradient-to-br from-yellow-100 to-yellow-200/70 border border-yellow-300/70 text-sm italic shadow-sm'
                 >
-                  {formatActorName(event.actor.name)} voted: {event.message}
+                  <span className='font-semibold not-italic text-yellow-900'>
+                    {formatActorName(event.actor.name)}
+                  </span>{' '}
+                  <span className='text-gray-700'>voted: {event.message}</span>
                 </div>
               )
             } else if (
@@ -1299,10 +1353,12 @@ function ChatHistory({
               return (
                 <div
                   key={`event-${idx}`}
-                  className='p-2 rounded bg-green-50 text-sm italic'
+                  className='px-3 py-2 rounded-lg bg-gradient-to-br from-emerald-100 to-emerald-200/70 border border-emerald-300/70 text-sm italic shadow-sm'
                 >
-                  {formatActorName(event.actor.name)} voted to pass:{' '}
-                  {event.message}
+                  <span className='font-semibold not-italic text-emerald-900'>
+                    {formatActorName(event.actor.name)}
+                  </span>{' '}
+                  <span className='text-gray-700'>voted to pass: {event.message}</span>
                 </div>
               )
             }
@@ -1313,26 +1369,28 @@ function ChatHistory({
             ? gameState.event_history.red_team.length === 0
             : gameState.event_history.blue_team.length === 0)) &&
           !(aiLoading && aiLoading.team === team) && (
-            <div className='text-gray-400 text-sm'>No activity yet</div>
+            <div className='text-gray-400 text-sm text-center py-8'>
+              No activity yet
+            </div>
           )}
 
         {aiLoading && aiLoading.team === team && (
-          <div className={'p-2 rounded text-sm italic text-gray-500'}>
+          <div className='px-3 py-2 rounded-lg bg-gradient-to-br from-gray-50 to-gray-100/50 border border-gray-200/50 text-sm italic text-gray-600 shadow-sm animate-pulse'>
             {aiLoading.action === 'hint'
-              ? 'AI is thinking of a hint...'
-              : 'AI is making guesses...'}
+              ? '💭 AI is thinking of a hint...'
+              : '🤔 AI is making guesses...'}
           </div>
         )}
       </div>
 
       {shouldShowGuessMessage ? (
         <div className='flex flex-col gap-2'>
-          <div className='text-gray-400 text-sm text-center italic'>
+          <div className='text-gray-500 text-xs text-center font-medium bg-white/50 py-1.5 rounded-lg'>
             Click on a card to make a guess
           </div>
           {gameState.current_turn.left_guesses > 0 && (
             <button
-              className='rounded bg-gray-500 p-2 text-white'
+              className='rounded-lg bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 p-2.5 text-white font-medium shadow-sm transition-all'
               disabled={passTurnMutation.isPending}
               onClick={handlePassTurn}
             >
@@ -1346,7 +1404,7 @@ function ChatHistory({
             <input
               ref={hintInputRef}
               type='text'
-              className='border border-gray-300 p-2 grow min-w-0'
+              className='border border-gray-300 rounded-lg p-2.5 grow min-w-0 shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500/50 focus:border-teal-500 transition-all'
               value={hint}
               onChange={(event) => setHint(event.target.value)}
               placeholder='Enter hint word'
@@ -1359,7 +1417,7 @@ function ChatHistory({
 
             <input
               type='number'
-              className='border border-gray-300 p-2 w-16 text-sm'
+              className='border border-gray-300 rounded-lg p-2.5 w-16 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500/50 focus:border-teal-500 transition-all'
               value={hintCount}
               onChange={(event) => setHintCount(event.target.value)}
               placeholder='#'
@@ -1373,11 +1431,11 @@ function ChatHistory({
           </div>
 
           <button
-            className='rounded bg-teal-500 p-2'
+            className='rounded-lg bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 p-2.5 text-white font-medium shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed'
             disabled={!hint || !hintCount || giveHintMutation.isPending}
             onClick={handleSubmitHint}
           >
-            {giveHintMutation.isPending ? 'Submitting...' : 'Submit hint'}
+            {giveHintMutation.isPending ? 'Submitting...' : 'Submit Hint'}
           </button>
         </>
       ) : null}
