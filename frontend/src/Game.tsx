@@ -232,6 +232,7 @@ function Game() {
     if (playerType === 'GPT4_1') return 'gpt-4.1'
     if (playerType === 'GEMINI') return 'gemini'
     return 'gpt-4.1' // default
+    return 'gpt-4.1' // default
   }
 
   // Track if we've already triggered AI action for current turn to prevent duplicate calls
@@ -681,9 +682,6 @@ function Game() {
     if (card.color === 'BLACK') return 'ASSASSIN'
     return 'NEUTRAL'
   }
-
-  const boardSize = gameState?.board_size || 25
-  const gridCols = Math.sqrt(boardSize)
 
   // Handler for card clicks (guesses)
   const handleCardGuess = async (word: string) => {
