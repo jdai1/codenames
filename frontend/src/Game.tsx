@@ -178,15 +178,18 @@ function Game() {
       const temp = new Audio('/sfx/card_flip.mp3')
       temp.muted = true
       temp.volume = 0
-      temp.play().then(() => {
-        // stop shortly after
-        setTimeout(() => {
-          temp.pause()
-          temp.currentTime = 0
-        }, 50)
-      }).catch(() => {
-        // ignore
-      })
+      temp
+        .play()
+        .then(() => {
+          // stop shortly after
+          setTimeout(() => {
+            temp.pause()
+            temp.currentTime = 0
+          }, 50)
+        })
+        .catch(() => {
+          // ignore
+        })
     } catch (_err) {}
   }
 
@@ -347,7 +350,9 @@ function Game() {
               flipEl.removeEventListener('ended', onEnded)
               playGuess()
             }
-            flipEl.addEventListener('ended', onEnded, { once: true } as AddEventListenerOptions)
+            flipEl.addEventListener('ended', onEnded, {
+              once: true,
+            } as AddEventListenerOptions)
           } else {
             playGuess()
           }
@@ -357,22 +362,17 @@ function Game() {
     prevRevealedCountRef.current = current
   }, [gameState?.board]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Map player type to model name
+  // Map player type to model name (long, non-shortened names)
   const getModelName = (playerType: PlayerTypeId): string => {
-    if (playerType === 'GPT4_1') return 'gpt-4.1'
-    if (playerType === 'GEMINI') return 'gemini'
     if (playerType === 'GPT5') return 'gpt-5'
-    if (playerType === 'CLAUDE_SONNET') return 'claude-sonnet'
+    if (playerType === 'CLAUDE_SONNET') return 'claude-sonnet-4-5-20250929'
     if (playerType === 'GEMINI_2_5_PRO') return 'gemini/gemini-2.5-pro'
     if (playerType === 'GROK_4') return 'xai/grok-4-fast-reasoning'
-    if (playerType === 'KIMI_K2_THINKING') return 'kimi-k2-thinking'
-    if (playerType === 'ZAI_4_6') return 'zai-4.6'
-    if (playerType === 'OPENAI_OSS') return 'openai oss'
-    if (playerType === 'QWEN_3_235B') return 'qwen 3 235b'
+    if (playerType === 'KIMI_K2_THINKING') return 'moonshot/kimi-k2-thinking'
     if (playerType === 'DEEPSEEK_V3_2_EXP_THINKING')
-      return 'deepseek v3.2-exp-thinking'
-    if (playerType === 'LLAMA_3_1_405B') return 'llama 3.1 405b'
-    return 'gpt-4.1' // default
+      return 'deepseek/deepseek-reasoner'
+    // Optionally add others here if used
+    return 'gpt-5' // default to a valid one present in MODEL_STRINGS
   }
 
   // Track if we've already triggered AI action for current turn to prevent duplicate calls
@@ -1333,7 +1333,6 @@ function ChatHistory({
         gameType={gameType}
         scoreText={`${score.revealed}/${score.total}`}
       />
-
       <div
         ref={chatHistoryRef}
         className='rounded-xl bg-white shadow-sm border border-gray-200/50 p-3 grow h-full flex flex-col gap-2.5 overflow-y-auto'
@@ -1526,7 +1525,6 @@ function ChatHistory({
           </div>
         )}
       </div>
-
       {shouldShowGuessMessage ? (
         <div className='flex flex-col gap-2'>
           <div className='text-gray-500 text-xs text-center font-medium bg-white/50 py-1.5 rounded-lg'>
@@ -1542,7 +1540,7 @@ function ChatHistory({
             </button>
           )}
         </div>
-      ) : isSpymasterTurn && isHumanSpymaster ? (
+      ) : isSpymasterTurn && isHumanSpymaster && gameState.winner === null ? (
         <>
           <div className='flex gap-2'>
             <input
@@ -1575,7 +1573,11 @@ function ChatHistory({
           </div>
 
           <button
-            className='rounded-lg bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 p-2.5 text-white font-medium shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed'
+            className={`rounded-lg p-2.5 text-white font-medium shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+              team === 'RED'
+                ? 'bg-[color:var(--color-code-names-red)]'
+                : 'bg-[color:var(--color-code-names-blue)]'
+            }`}
             disabled={!hint || !hintCount || giveHintMutation.isPending}
             onClick={handleSubmitHint}
           >
@@ -1766,18 +1768,13 @@ function Card({
 
 type PlayerTypeId =
   | 'HUMAN'
-  | 'GPT4_1'
-  | 'GEMINI'
   | 'GPT5'
   | 'CLAUDE_SONNET'
   | 'GEMINI_2_5_PRO'
   | 'GROK_4'
   | 'KIMI_K2_THINKING'
-  | 'ZAI_4_6'
-  | 'OPENAI_OSS'
-  | 'QWEN_3_235B'
   | 'DEEPSEEK_V3_2_EXP_THINKING'
-  | 'LLAMA_3_1_405B'
+
 type PlayerType = {
   label: string
   isAI: boolean
@@ -1785,18 +1782,12 @@ type PlayerType = {
 
 const playerTypes: Record<PlayerTypeId, PlayerType> = {
   HUMAN: { label: 'Human', isAI: false },
-  GPT4_1: { label: 'GPT 4.1', isAI: true },
-  GEMINI: { label: 'Gemini', isAI: true },
   GPT5: { label: 'GPT-5', isAI: true },
   CLAUDE_SONNET: { label: 'Claude Sonnet', isAI: true },
   GEMINI_2_5_PRO: { label: 'Gemini 2.5 Pro', isAI: true },
   GROK_4: { label: 'Grok-4', isAI: true },
   KIMI_K2_THINKING: { label: 'Kimi K2 Thinking', isAI: true },
-  ZAI_4_6: { label: 'Zai 4.6', isAI: true },
-  OPENAI_OSS: { label: 'OpenAI OSS', isAI: true },
-  QWEN_3_235B: { label: 'Qwen 3 235B', isAI: true },
   DEEPSEEK_V3_2_EXP_THINKING: { label: 'DeepSeek v3.2 (Thinking)', isAI: true },
-  LLAMA_3_1_405B: { label: 'Llama 3.1 405B', isAI: true },
 }
 
 function PlayerTypeSelect({
