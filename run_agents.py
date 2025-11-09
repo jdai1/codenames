@@ -132,8 +132,8 @@ def spymaster_turn(
     game: CodenamesGame,
     spymaster: Agent,
     message_history: List[Dict[str, str]],
-) -> Tuple[bool, Dict[str, Any]]:
-    """Handle a single spymaster turn. Returns (success, result_dict)."""
+) -> Tuple[bool, Dict[str, Any], float, int]:
+    """Handle a single spymaster turn. Returns (success, result_dict, model_cost, token_usage)."""
     state = game.get_state(show_colors=True)
     board_str = format_board_for_spymaster(game)
     team = _name(state.current_turn.team)
@@ -141,6 +141,9 @@ def spymaster_turn(
     opponent_emoji = _team_to_emoji("RED") if team == "BLUE" else _team_to_emoji("BLUE")
     remaining = remaining_words_for_team(state, team)
     board_words = set(game.state.board.all_words)
+
+    total_model_cost = 0
+    total_token_usage = 0
 
     user_msg = SPYMASTER_USER_PROMPT.format(
         team=team,
@@ -153,9 +156,11 @@ def spymaster_turn(
     max_attempts = max(1, spymaster.max_iterations)
     for _ in range(max_attempts):
         inc_llm_calls(step=f"{spymaster.name}.run")
-        result, assistant_msg, _, _ = spymaster.run(
+        result, assistant_msg, model_cost, token_usage = spymaster.run(
             user_message=user_msg, message_history=message_history
         )
+        total_model_cost += model_cost
+        total_token_usage += token_usage
         private_reasoning = (
             result.get("reasoning") or (assistant_msg.get("reasoning_content") or "")
         ).strip()
@@ -170,7 +175,7 @@ def spymaster_turn(
             message_history.append(
                 {"role": "assistant", "content": f"SPYMASTER: {combined_message}"}
             )
-            
+
             actor = LLMActor(name=spymaster.name, model=spymaster.model)
             spymaster_event = SpymasterEvent(
                 team_color=state.current_turn.team,
@@ -180,8 +185,12 @@ def spymaster_turn(
             )
             game.state.history.add_event(spymaster_event)
         if result.get("type") != "hint":
-            return False, {"reason": f"unexpected result: {result}"}
-        
+            return (
+                False,
+                {"reason": f"unexpected result: {result}"},
+                total_model_cost,
+                total_token_usage,
+            )
 
         clue_raw = result.get("clue") or ""
         clue = clue_raw.strip()
@@ -204,20 +213,40 @@ def spymaster_turn(
         try:
             hint_res = game.give_hint(word=clue, card_amount=qty, actor=actor)
         except Exception as e:  # pylint: disable=broad-except
-            return False, {
-                "reason": f"hint rejected: {e}",
-                "clue": clue,
-                "quantity": qty,
-            }
+            return (
+                False,
+                {
+                    "reason": f"hint rejected: {e}",
+                    "clue": clue,
+                    "quantity": qty,
+                },
+                total_model_cost,
+                total_token_usage,
+            )
         if not hint_res.success:
-            return False, {
-                "reason": hint_res.reason or "hint not applied",
-                "clue": clue,
-                "quantity": qty,
-            }
-        return True, {"clue": clue, "quantity": qty}
+            return (
+                False,
+                {
+                    "reason": hint_res.reason or "hint not applied",
+                    "clue": clue,
+                    "quantity": qty,
+                },
+                total_model_cost,
+                total_token_usage,
+            )
+        return (
+            True,
+            {"clue": clue, "quantity": qty},
+            total_model_cost,
+            total_token_usage,
+        )
 
-    return False, {"reason": "hint attempts exhausted"}
+    return (
+        False,
+        {"reason": "hint attempts exhausted"},
+        total_model_cost,
+        total_token_usage,
+    )
 
 
 def collect_majority_vote(votes: List[str], quorum: int) -> str | None:
@@ -239,12 +268,16 @@ def guesser_turn(
     """Coordinate operative discussion and majority voting for guesses until turn ends or pass.
 
     Yields OperativeEvent objects as they happen for streaming to frontend."""
+
+    total_model_cost = 0
+    total_token_usage = 0
     team_turn = game.get_current_turn().team
     while True:
         # Refresh state for display and constraints
         board_str = format_board_for_operatives(game)
         last_hint = game.get_last_hint()
         if last_hint is None:
+            yield total_model_cost, total_token_usage
             return
 
         votes_by_agent: Dict[str, str] = {}
@@ -261,6 +294,11 @@ def guesser_turn(
         # Iterate limited discussion/voting rounds to reach majority
         for round_i in range(max_rounds):
             for agent in ops:
+                # Exit immediately if turn/role changed (e.g., after pass or wrong guess)
+                ct = game.get_current_turn()
+                if _name(ct.team) != _name(team_turn) or _name(ct.role) != "GUESSER":
+                    yield total_model_cost, total_token_usage
+                    return
                 votes_display = formatted_votes()
                 user_msg = OPERATIVE_USER_PROMPT.format(
                     team=_name(team_turn),
@@ -272,10 +310,11 @@ def guesser_turn(
                 )
 
                 inc_llm_calls(step=f"{agent.name}.run")
-                result, assistant_msg, _, _ = agent.run(
+                result, assistant_msg, model_cost, token_usage = agent.run(
                     user_message=user_msg, message_history=message_history
                 )
-
+                total_model_cost += model_cost
+                total_token_usage += token_usage
                 # Create LLM actor for this operative
                 actor = LLMActor(name=agent.name, model=agent.model)
 
@@ -432,6 +471,7 @@ def guesser_turn(
                             )
                             print("Vote result: PASS -> turn passed")
                         votes_by_agent.clear()
+                        yield total_model_cost, total_token_usage
                         return
                     else:
                         guess_word = majority
@@ -446,6 +486,7 @@ def guesser_turn(
                                 }
                             )
                             print(f"Vote result: {guess_word.upper()} -> failed ({e})")
+                            yield total_model_cost, total_token_usage
                             return
 
                         # Log outcome
@@ -469,6 +510,7 @@ def guesser_turn(
 
                         # If game ended or turn switched (wrong or out of guesses), break out
                         if guess_res.is_game_over:
+                            yield total_model_cost, total_token_usage
                             return
 
                         # After a correct guess, if still this team's guess turn continues automatically
@@ -477,6 +519,7 @@ def guesser_turn(
                             _name(ct.team) != _name(team_turn)
                             or _name(ct.role) != "GUESSER"
                         ):
+                            yield total_model_cost, total_token_usage
                             return
 
                         # Continue to next guess in same turn
@@ -494,6 +537,7 @@ def guesser_turn(
             print(f"Vote result: PASS -> failed ({e})")
         else:
             print("Vote result: NO CONSENSUS -> PASS")
+        yield total_model_cost, total_token_usage
         return
 
 
@@ -517,6 +561,8 @@ def main():
 
     round_number = 1
 
+    final_model_cost = 0
+    final_token_usage = 0
     # Main game loop
     print(f"Starting Codenames game: {game}")
     while not game.is_game_over():
@@ -531,7 +577,11 @@ def main():
             print(f"\n=== ROUND {round_number}: TEAM {team_label} ===")
             print("Board (uncensored):")
             print(format_board_for_spymaster(game))
-            ok, info = spymaster_turn(game, spy, spymaster_histories[team_key])
+            ok, info, model_cost, token_usage = spymaster_turn(
+                game, spy, spymaster_histories[team_key]
+            )
+            final_model_cost += model_cost
+            final_token_usage += token_usage
             if not ok:
                 print(f"Spymaster error for {team_key}: {info}")
                 # If spymaster fails, try to pass turn to avoid deadlock
@@ -548,7 +598,12 @@ def main():
             ops = blue_ops if team_key == "BLUE" else red_ops
             history_before = len(operative_histories[team_key])
             # Consume the generator to execute the turn
-            for _ in guesser_turn(game, ops, operative_histories[team_key]):
+            for item in guesser_turn(game, ops, operative_histories[team_key]):
+                # check type
+                if isinstance(item, tuple):
+                    model_cost, token_usage = item
+                    final_model_cost += model_cost
+                    final_token_usage += token_usage
                 pass  # Events are already printed in guesser_turn
             round_messages = operative_histories[team_key][history_before:]
             summary = summarize_round_messages(round_messages, model=model)
@@ -574,6 +629,8 @@ def main():
     print("Game over!")
     if final.winner:
         print(f"Winner: {_name(final.winner.team_color)}")
+    print(f"Total model cost: {final_model_cost}")
+    print(f"Total token usage: {final_token_usage}")
     print(json.dumps(final.dict(), indent=2, default=str))
 
 
