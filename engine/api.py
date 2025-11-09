@@ -39,19 +39,23 @@ def create_game():
             "seed": null
         }
     """
+
     data = request.get_json() or {}
 
     language = data.get("language", "english")
     board_size = data.get("board_size", 25)
-    seed = data.get("seed")
+    seed = data.get("seed", 67)
 
     try:
         game = CodenamesGame(
             language=language, board_size=board_size, seed=seed)
         games[game.game_id] = game
 
+        state = game.get_state(show_colors=True)
+
         return jsonify(
-            {"game_id": game.game_id, "message": "Game created successfully"}
+            {"game_id": game.game_id,
+                "message": "Game created successfully", "game_state": state.dict()}
         ), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 400
