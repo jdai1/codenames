@@ -941,14 +941,30 @@ function Game() {
   )
 }
 
-const TEAM_NAME_TO_LABEL = {
-  RED: 'Red',
-  BLUE: 'Blue',
-}
-
 const TEAM_NAME_TO_COLOR = {
   RED: 'text-red-600',
   BLUE: 'text-cyan-700',
+}
+
+// Editable display names for each model/provider
+const MODEL_DISPLAY_NAME: Record<
+  | PlayerTypeId
+  | 'HUMAN',
+  string
+> = {
+  HUMAN: 'Human',
+  GPT4_1: 'GPT 4.1',
+  GEMINI: 'Gemini',
+  GPT5: 'GPT 5',
+  CLAUDE_SONNET: 'Claude',
+  GEMINI_2_5_PRO: 'Gemini',
+  GROK_4: 'Grok',
+  KIMI_K2_THINKING: 'Kimi',
+  ZAI_4_6: 'Z.ai',
+  OPENAI_OSS: 'OpenAI OSS',
+  QWEN_3_235B: 'Qwen',
+  DEEPSEEK_V3_2_EXP_THINKING: 'DeepSeek',
+  LLAMA_3_1_405B: 'Llama',
 }
 
 type ChatHistoryProps = {
@@ -977,6 +993,14 @@ function ChatHistory({
   const [expandedTalkEvents, setExpandedTalkEvents] = useState<Set<number>>(
     new Set()
   )
+
+  const formatActorName = (name: string) => {
+    const match = name.match(/op-(\d+)/i)
+    if (match) {
+      return `Operative ${match[1]}`
+    }
+    return name
+  }
 
   const score = team === 'RED' ? gameState.score.red : gameState.score.blue
 
@@ -1210,7 +1234,7 @@ function ChatHistory({
                   key={`event-${idx}`}
                   className='p-2 rounded bg-cyan-100 text-sm italic'
                 >
-                  {event.actor.name}: {event.message}
+                  {formatActorName(event.actor.name)}: {event.message}
                 </div>
               )
             } else if (
@@ -1233,7 +1257,7 @@ function ChatHistory({
                   className='p-2 rounded bg-purple-50 text-sm italic'
                 >
                   <div className='font-semibold not-italic mb-1'>
-                    {event.actor.name}:
+                    {formatActorName(event.actor.name)}:
                   </div>
                   <div className='whitespace-pre-wrap'>{displayMessage}</div>
                   {hasMoreContent && (
@@ -1266,7 +1290,7 @@ function ChatHistory({
                   key={`event-${idx}`}
                   className='p-2 rounded bg-yellow-50 text-sm italic'
                 >
-                  {event.actor.name} voted: {event.message}
+                  {formatActorName(event.actor.name)} voted: {event.message}
                 </div>
               )
             } else if (
@@ -1279,7 +1303,7 @@ function ChatHistory({
                   key={`event-${idx}`}
                   className='p-2 rounded bg-green-50 text-sm italic'
                 >
-                  {event.actor.name} voted to pass: {event.message}
+                  {formatActorName(event.actor.name)} voted to pass: {event.message}
                 </div>
               )
             }
@@ -1423,7 +1447,7 @@ function HeaderWithLogo({
         />
       ) : null}
       <span>
-        Team {TEAM_NAME_TO_LABEL[team]} {scoreText}
+        Team {MODEL_DISPLAY_NAME[preferredType] ?? playerTypes[preferredType]?.label ?? 'Unknown'} {scoreText}
       </span>
     </h2>
   )
