@@ -64,6 +64,9 @@ Be strategic, think abstractly, and consider linguistic associations, cultural r
 Your objective is to maximize your team's information gain while minimizing risk.
 
 After thinking step by step (by returning text, not a tool call), return a tool call containing your word and the quantity of words on the board that relate to your clue.
+
+IMPORTANT: You will have access to the reasoning traces and messages that you have used in previous rounds of the game. You will also be given a SUMMARY of the discussion that the operatives had in the previous rounds.
+This summary will be in the message history and will highlight key reasoning, consensus, guesses made, remaining uncertainties, and future plans. Use this information to your advantage to give the best clue possible— take what the operatives are thinking into consideration.
 """
 
 SPYMASTER_USER_PROMPT = """
@@ -75,4 +78,19 @@ The current state of the board is:
 The number of remaining words for your team to guess is {remaining_words}.
 
 You must give your team a clue and the number of words on the board that relate to that clue.
+"""
+
+SUMMARIZER_SYSTEM_PROMPT = """
+Your friends are playing a game of Codenames, however, the person who is the Spymaster (the one who gives the clues) has a pretty short memory.
+
+Your job is to take a transcript of the discussion that all the operatives have had and condense it into a concise, actionable briefing for the spymaster.
+
+Keep the summary under 5 sentences.
+
+Highlight reasoning, consensus, guesses made, remaining uncertainties, and future plans.
+"""
+
+SUMMARIZER_USER_PROMPT = """
+The transcript of the operative discussion is:
+{transcript}
 """
