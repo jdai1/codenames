@@ -235,8 +235,10 @@ def guesser_turn(
     ops: List[Agent],
     message_history: List[Dict[str, str]],
     max_rounds: int = 25,
-) -> None:
-    """Coordinate operative discussion and majority voting for guesses until turn ends or pass."""
+):
+    """Coordinate operative discussion and majority voting for guesses until turn ends or pass.
+
+    Yields OperativeEvent objects as they happen for streaming to frontend."""
     team_turn = game.get_current_turn().team
     while True:
         # Refresh state for display and constraints
@@ -294,6 +296,9 @@ def guesser_turn(
                         {"role": "assistant", "content": f"{agent.name}: {talk_msg}"}
                     )
                     print(f"{agent.name.upper()}: {talk_msg}")
+
+                    # Yield event for streaming
+                    yield operative_event
                 elif result.get("type") == "vote":
                     word = str(result.get("word", "")).strip()
                     if word:
@@ -358,6 +363,9 @@ def guesser_turn(
                             )
                         else:
                             print(f"{agent.name.upper()} votes for {word.upper()}")
+
+                        # Yield event for streaming
+                        yield operative_event
                 elif result.get("type") == "pass":
                     # Add operative event for interpretability
                     operative_event = OperativeEvent(
@@ -384,6 +392,9 @@ def guesser_turn(
                         print(f"{agent.name.upper()} reaffirms vote to PASS")
                     else:
                         print(f"{agent.name.upper()} votes to PASS")
+
+                    # Yield event for streaming
+                    yield operative_event
                 else:
                     # Ignore unknown result types
                     pass
@@ -536,7 +547,9 @@ def main():
         else:
             ops = blue_ops if team_key == "BLUE" else red_ops
             history_before = len(operative_histories[team_key])
-            guesser_turn(game, ops, operative_histories[team_key])
+            # Consume the generator to execute the turn
+            for _ in guesser_turn(game, ops, operative_histories[team_key]):
+                pass  # Events are already printed in guesser_turn
             round_messages = operative_histories[team_key][history_before:]
             summary = summarize_round_messages(round_messages, model=model)
             if summary:

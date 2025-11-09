@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Flask API server for Codenames game."""
 
+import json
 import random
 from typing import Dict
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response, stream_with_context
 from flask_cors import CORS
 
 from engine.game_main import CodenamesGame
@@ -227,7 +228,7 @@ def ai_make_guess(game_id: str):
 
     Body: {"model": "gpt-4", "n_operatives": 1} (optional, defaults)
 
-    Response: Success message or error
+    Response: Server-Sent Events stream of operative events
     """
     if game_id not in games:
         return jsonify({"error": "Game not found"}), 404
@@ -250,39 +251,56 @@ def ai_make_guess(game_id: str):
                     },
                 }
             ), 400
-        # Build operative agents using the same primitive as run_agents.py
-        state = game.get_state(show_colors=False)
-        team = state.current_turn.team
-        operatives = build_operatives(
-            team_name=_name(team), model=model, n=n_operatives
-        )
+    except Exception as e:
+        return jsonify({"error": f"Internal error: {str(e)}"}), 500
 
-        # Get message history from game state
-        message_history = game.state.get_message_history(
-            team, game.state.current_player_role
-        )
+    def generate():
+        """Generate SSE stream of operative events."""
+        try:
+            # Build operative agents using the same primitive as run_agents.py
+            state = game.get_state(show_colors=False)
+            team = state.current_turn.team
+            operatives = build_operatives(
+                team_name=_name(team), model=model, n=n_operatives
+            )
 
-        # Use the high-level guesser_turn function from run_agents.py
-        # This handles the full guessing logic including voting, multiple guesses, etc.
-        guesser_turn(game, operatives, message_history, max_rounds=25)
+            # Get message history from game state
+            message_history = game.state.get_message_history(
+                team, game.state.current_player_role
+            )
 
-        # Return success - guesser_turn handles all the guessing internally
-        return jsonify(
-            {
-                "success": True,
-                "message": "Guesser turn completed",
+            # Use the high-level guesser_turn function from run_agents.py
+            # This handles the full guessing logic including voting, multiple guesses, etc.
+            # It now yields events as they happen
+            for event in guesser_turn(game, operatives, message_history, max_rounds=25):
+                # Send event as SSE
+                yield json.dumps(event.dict())
+
+            # Send final completion event
+            yield json.dumps({
+                "type": "complete",
                 "current_turn": {
                     "team": _name(game.state.current_team_color),
                     "role": game.state.current_player_role.value,
                 },
                 "is_game_over": game.is_game_over(),
-            }
-        )
+            })
 
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    except Exception as e:
-        return jsonify({"error": f"Internal error: {str(e)}"}), 500
+        except ValueError as e:
+            error_data = json.dumps({"type": "error", "error": str(e)})
+            yield f"data: {error_data}\n\n"
+        except Exception as e:
+            error_data = json.dumps({"type": "error", "error": f"Internal error: {str(e)}"})
+            yield f"data: {error_data}\n\n"
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        }
+    )
 
 
 if __name__ == "__main__":
