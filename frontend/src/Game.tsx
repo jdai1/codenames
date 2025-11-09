@@ -114,6 +114,8 @@ type CreateGameResponse = {
 
 function Game() {
   const [gameType, setGameType] = useState<GameType>(defaultGameType)
+  const [redOperators, setRedOperators] = useState<number>(1)
+  const [blueOperators, setBlueOperators] = useState<number>(1)
   const [gameId, setGameId] = useState<string | null>(null)
   const [spymasterView, setSpymasterView] = useState(false)
 
@@ -233,11 +235,17 @@ function Game() {
     team: 'RED' | 'BLUE'
     action: 'hint' | 'guess'
   } | null>(null)
+  // Track AI loading state: { team: 'RED' | 'BLUE', action: 'hint' | 'guess' } | null
+  const [aiLoading, setAiLoading] = useState<{
+    team: 'RED' | 'BLUE'
+    action: 'hint' | 'guess'
+  } | null>(null)
 
   // Auto-trigger AI actions when it's an AI's turn
   useEffect(() => {
     if (!gameState || !gameId || gameState.is_game_over) {
       aiActionTriggeredRef.current = ''
+      setAiLoading(null)
       setAiLoading(null)
       return
     }
@@ -262,6 +270,7 @@ function Game() {
       if (currentRole === 'HINTER') {
         // AI Spymaster - give hint
         setAiLoading({ team: currentTeam, action: 'hint' })
+        setAiLoading({ team: currentTeam, action: 'hint' })
         fetch(new URL(`/games/${gameId}/ai/hint`, API_URL), {
           method: 'POST',
           headers: {
@@ -285,21 +294,24 @@ function Game() {
             })
             aiActionTriggeredRef.current = '' // Reset to allow next turn
             setAiLoading(null)
+            setAiLoading(null)
           })
           .catch((error) => {
             console.error('AI hint error:', error)
             aiActionTriggeredRef.current = '' // Reset on error
             setAiLoading(null)
+            setAiLoading(null)
           })
       } else if (currentRole === 'GUESSER') {
         // AI Guesser - make guess
         setAiLoading({ team: currentTeam, action: 'guess' })
+        const nOperatives = currentTeam === 'RED' ? redOperators : blueOperators
         fetch(new URL(`/games/${gameId}/ai/guess`, API_URL), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ model, n_operatives: 1 }),
+          body: JSON.stringify({ model, n_operatives: nOperatives }),
         })
           .then((response) => {
             if (!response.ok) {
@@ -317,16 +329,19 @@ function Game() {
             })
             aiActionTriggeredRef.current = '' // Reset to allow next turn
             setAiLoading(null)
+            setAiLoading(null)
           })
           .catch((error) => {
             console.error('AI guess error:', error)
             aiActionTriggeredRef.current = '' // Reset on error
+            setAiLoading(null)
             setAiLoading(null)
           })
       }
     } else {
       // Reset when it's a human turn
       aiActionTriggeredRef.current = ''
+      setAiLoading(null)
       setAiLoading(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -337,6 +352,8 @@ function Game() {
     gameState?.is_game_over,
     gameId,
     gameType,
+    redOperators,
+    blueOperators,
     queryClient,
   ])
 
@@ -422,61 +439,92 @@ function Game() {
 
   return (
     <div className='flex flex-col h-screen'>
-      <div className='p-4 flex justify-between'>
-        <div className='flex gap-8'>
+      <div className='p-4'>
+        <div className='flex flex-col gap-4'>
           <div className='flex gap-2 items-center'>
             <span className='text-red-600 font-bold'>Red Team:</span>
-            <PlayerTypeSelect
-              value={gameType.red.spymaster}
-              onChange={(value: PlayerTypeId) =>
-                setGameType((prev: GameType) => ({
-                  ...prev,
-                  red: { ...prev.red, spymaster: value },
-                }))
-              }
-            />
-            <PlayerTypeSelect
-              value={gameType.red.guesser}
-              onChange={(value: PlayerTypeId) =>
-                setGameType((prev: GameType) => ({
-                  ...prev,
-                  red: { ...prev.red, guesser: value },
-                }))
-              }
-            />
+            <div className='flex gap-1 items-center'>
+              <label className='text-sm'>Spymaster:</label>
+              <PlayerTypeSelect
+                value={gameType.red.spymaster}
+                onChange={(value: PlayerTypeId) =>
+                  setGameType((prev: GameType) => ({
+                    ...prev,
+                    red: { ...prev.red, spymaster: value },
+                  }))
+                }
+              />
+            </div>
+            <div className='flex gap-1 items-center'>
+              <label className='text-sm'>Operator:</label>
+              <PlayerTypeSelect
+                value={gameType.red.guesser}
+                onChange={(value: PlayerTypeId) =>
+                  setGameType((prev: GameType) => ({
+                    ...prev,
+                    red: { ...prev.red, guesser: value },
+                  }))
+                }
+              />
+              <input
+                type='number'
+                className='border border-gray-300 p-2 w-16 text-sm rounded'
+                value={gameType.red.guesser === 'HUMAN' ? '' : redOperators}
+                onChange={(e) => setRedOperators(parseInt(e.target.value) || 1)}
+                min='1'
+                placeholder='#'
+                disabled={gameType.red.guesser === 'HUMAN'}
+              />
+            </div>
           </div>
           <div className='flex gap-2 items-center'>
             <span className='text-blue-600 font-bold'>Blue Team:</span>
-            <PlayerTypeSelect
-              value={gameType.blue.spymaster}
-              onChange={(value: PlayerTypeId) =>
-                setGameType((prev: GameType) => ({
-                  ...prev,
-                  blue: { ...prev.blue, spymaster: value },
-                }))
-              }
-            />
-            <PlayerTypeSelect
-              value={gameType.blue.guesser}
-              onChange={(value: PlayerTypeId) =>
-                setGameType((prev: GameType) => ({
-                  ...prev,
-                  blue: { ...prev.blue, guesser: value },
-                }))
-              }
-            />
+            <div className='flex gap-1 items-center'>
+              <label className='text-sm'>Spymaster:</label>
+              <PlayerTypeSelect
+                value={gameType.blue.spymaster}
+                onChange={(value: PlayerTypeId) =>
+                  setGameType((prev: GameType) => ({
+                    ...prev,
+                    blue: { ...prev.blue, spymaster: value },
+                  }))
+                }
+              />
+            </div>
+            <div className='flex gap-1 items-center'>
+              <label className='text-sm'>Operator:</label>
+              <PlayerTypeSelect
+                value={gameType.blue.guesser}
+                onChange={(value: PlayerTypeId) =>
+                  setGameType((prev: GameType) => ({
+                    ...prev,
+                    blue: { ...prev.blue, guesser: value },
+                  }))
+                }
+              />
+              <input
+                type='number'
+                className='border border-gray-300 p-2 w-16 text-sm rounded'
+                value={gameType.blue.guesser === 'HUMAN' ? '' : blueOperators}
+                onChange={(e) =>
+                  setBlueOperators(parseInt(e.target.value) || 1)
+                }
+                min='1'
+                placeholder='#'
+                disabled={gameType.blue.guesser === 'HUMAN'}
+              />
+            </div>
           </div>
+          <button
+            className='rounded bg-amber-400 p-2 px-4 self-start'
+            onClick={() => {
+              createNewGame.mutate()
+            }}
+            disabled={createNewGame.isPending}
+          >
+            {createNewGame.isPending ? 'Creating...' : 'Start game'}
+          </button>
         </div>
-
-        <button
-          className='rounded bg-amber-400 p-2 px-4'
-          onClick={() => {
-            createNewGame.mutate()
-          }}
-          disabled={createNewGame.isPending}
-        >
-          {createNewGame.isPending ? 'Creating...' : 'Start game'}
-        </button>
 
         {gameState && (
           <div className='flex items-center'>
@@ -526,6 +574,7 @@ function Game() {
               gameId={gameId!}
               onHintSubmitted={() => setSpymasterView(false)}
               aiLoading={aiLoading}
+              aiLoading={aiLoading}
             />
           </div>
           <div className='col-span-3 bg-gray-200 p-4'>
@@ -569,6 +618,7 @@ function Game() {
               gameState={gameState}
               gameType={gameType.blue}
               aiLoading={aiLoading}
+              aiLoading={aiLoading}
               gameId={gameId!}
               onHintSubmitted={() => setSpymasterView(false)}
             />
@@ -602,6 +652,7 @@ type ChatHistoryProps = {
   gameId: string
   onHintSubmitted: () => void
   aiLoading: { team: 'RED' | 'BLUE'; action: 'hint' | 'guess' } | null
+  aiLoading: { team: 'RED' | 'BLUE'; action: 'hint' | 'guess' } | null
 }
 
 function ChatHistory({
@@ -610,6 +661,7 @@ function ChatHistory({
   gameType,
   gameId,
   onHintSubmitted,
+  aiLoading,
   aiLoading,
 }: ChatHistoryProps) {
   const [hint, setHint] = useState('')
@@ -824,6 +876,20 @@ function ChatHistory({
               ? 'AI is thinking of a hint...'
               : 'AI is making guesses...'}
           </div>
+            : gameState.event_history.blue_team.length === 0)) &&
+          !(aiLoading && aiLoading.team === team) && (
+            <div className='text-gray-400 text-sm'>No activity yet</div>
+          )}
+        {aiLoading && aiLoading.team === team && (
+          <div
+            className={`p-2 rounded text-sm italic ${
+              team === 'RED' ? 'bg-red-50' : 'bg-blue-50'
+            }`}
+          >
+            {aiLoading.action === 'hint'
+              ? 'AI is thinking of a hint...'
+              : 'AI is making guesses...'}
+          </div>
         )}
       </div>
 
@@ -861,7 +927,7 @@ function ChatHistory({
 
             <input
               type='number'
-              className='border border-gray-300 p-2 w-16'
+              className='border border-gray-300 p-2 w-16 text-sm'
               value={hintCount}
               onChange={(event) => setHintCount(event.target.value)}
               placeholder='#'
