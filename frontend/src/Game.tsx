@@ -947,11 +947,10 @@ function Game() {
                 : 'bg-amber-400 hover:bg-amber-500 font-medium'
             }`}
             onClick={() => {
-              unlockAudio()
-              createNewGame.mutate()
               if (gameId) {
                 setGameId(null)
               } else {
+                unlockAudio()
                 createNewGame.mutate()
               }
             }}
@@ -1073,7 +1072,7 @@ function Game() {
         </div>
       )}
 
-      {gameState && (
+      {gameState && gameId && (
         <div className='grid grid-cols-5 h-[calc(100vh-100px)] grow'>
           <div className='col-span-1 f overflow-scroll'>
             <ChatHistory
@@ -1129,11 +1128,12 @@ function Game() {
         </div>
       )}
 
-      {!gameState && !isLoading && (
-        <div className='flex items-center justify-center h-full'>
-          <div>Click "Start new game" to begin</div>
-        </div>
-      )}
+      {(!gameState && !isLoading) ||
+        (!gameId && (
+          <div className='flex items-center justify-center h-full'>
+            <div>Click "Start" to begin</div>
+          </div>
+        ))}
     </div>
   )
 }
