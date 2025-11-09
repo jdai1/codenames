@@ -56,6 +56,42 @@ type GivenHint = {
   team: TeamColor
 }
 
+type Actor = {
+  actor_type: 'user' | 'llm'
+  name: string
+  model?: string // Only for LLM actors
+}
+
+type HintEventData = {
+  card_amount: number
+  team_color: TeamColor
+  word: string
+}
+
+type GivenGuessData = {
+  given_hint: HintEventData
+  guessed_card: { word: string; color: CardColor | null }
+  correct: boolean
+}
+
+type GameEvent = {
+  actor: Actor
+  event_type: 'hint_given' | 'guess_made' | 'turn_passed' | 'chat_message'
+  hint?: HintEventData // For hint_given events
+  guess?: GivenGuessData // For guess_made events
+  message?: string // For chat_message events
+  message_metadata?: Record<string, unknown> // For chat_message events
+  player_role: string
+  team_color: TeamColor
+  timestamp: string
+}
+
+type EventHistory = {
+  blue_team: GameEvent[]
+  global_events: GameEvent[]
+  red_team: GameEvent[]
+}
+
 type GameState = {
   game_id: string
   board: CardWithIndex[]
@@ -66,6 +102,7 @@ type GameState = {
   is_game_over: boolean
   winner: { team_color: TeamColor; reason: string } | null
   board_size: number
+  event_history?: EventHistory
 }
 
 type CreateGameResponse = {
@@ -100,9 +137,12 @@ function Game() {
       setGameId(data.game_id)
       // Store the full game state (with show_colors=true) for spymaster view
       queryClient.setQueryData(['gameStateFull', data.game_id], data.game_state)
-      // Fetch and store the operative view (with show_colors=false)
+      // Fetch and store the operative view (with show_colors=false) with history
       const operativeResponse = await fetch(
-        new URL(`/games/${data.game_id}?show_colors=false`, API_URL),
+        new URL(
+          `/games/${data.game_id}?show_colors=false&include_history=true`,
+          API_URL
+        ),
         {
           method: 'GET',
         }
@@ -110,6 +150,21 @@ function Game() {
       if (operativeResponse.ok) {
         const operativeState = await operativeResponse.json()
         queryClient.setQueryData(['gameState', data.game_id], operativeState)
+      }
+
+      // Also store full state with history
+      const fullResponse = await fetch(
+        new URL(
+          `/games/${data.game_id}?show_colors=true&include_history=true`,
+          API_URL
+        ),
+        {
+          method: 'GET',
+        }
+      )
+      if (fullResponse.ok) {
+        const fullState = await fullResponse.json()
+        queryClient.setQueryData(['gameStateFull', data.game_id], fullState)
       }
     },
   })
@@ -120,7 +175,10 @@ function Game() {
     queryFn: async () => {
       if (!gameId) return null
       const response = await fetch(
-        new URL(`/games/${gameId}?show_colors=false`, API_URL),
+        new URL(
+          `/games/${gameId}?show_colors=false&include_history=true`,
+          API_URL
+        ),
         {
           method: 'GET',
         }
@@ -139,7 +197,10 @@ function Game() {
     queryFn: async () => {
       if (!gameId) return null
       const response = await fetch(
-        new URL(`/games/${gameId}?show_colors=true`, API_URL),
+        new URL(
+          `/games/${gameId}?show_colors=true&include_history=true`,
+          API_URL
+        ),
         {
           method: 'GET',
         }
@@ -202,9 +263,12 @@ function Game() {
           throw new Error(error.error || 'Failed to make guess')
         }
 
-        // Explicitly refetch game state from the endpoint
+        // Explicitly refetch game state from the endpoint with history
         const operativeResponse = await fetch(
-          new URL(`/games/${gameId}?show_colors=false`, API_URL),
+          new URL(
+            `/games/${gameId}?show_colors=false&include_history=true`,
+            API_URL
+          ),
           {
             method: 'GET',
           }
@@ -215,7 +279,10 @@ function Game() {
         }
 
         const fullResponse = await fetch(
-          new URL(`/games/${gameId}?show_colors=true`, API_URL),
+          new URL(
+            `/games/${gameId}?show_colors=true&include_history=true`,
+            API_URL
+          ),
           {
             method: 'GET',
           }
@@ -462,9 +529,12 @@ function ChatHistory({
       setHintCount('')
       onHintSubmitted() // Turn off spymaster view
 
-      // Explicitly refetch game state from the endpoint
+      // Explicitly refetch game state from the endpoint with history
       const operativeResponse = await fetch(
-        new URL(`/games/${gameId}?show_colors=false`, API_URL),
+        new URL(
+          `/games/${gameId}?show_colors=false&include_history=true`,
+          API_URL
+        ),
         {
           method: 'GET',
         }
@@ -475,7 +545,10 @@ function ChatHistory({
       }
 
       const fullResponse = await fetch(
-        new URL(`/games/${gameId}?show_colors=true`, API_URL),
+        new URL(
+          `/games/${gameId}?show_colors=true&include_history=true`,
+          API_URL
+        ),
         {
           method: 'GET',
         }
@@ -506,8 +579,60 @@ function ChatHistory({
         Team {TEAM_NAME_TO_LABEL[team]} {score.revealed}/{score.total}
       </h2>
 
-      <div className='border border-gray-300 p-2 grow h-full flex flex-col gap-2'>
-        <div className='p-2 bg-red-100 rounded'>Hint: automobile 6</div>
+      <div className='border border-gray-300 p-2 grow h-full flex flex-col gap-2 overflow-y-auto'>
+        {gameState.event_history &&
+          (team === 'RED'
+            ? gameState.event_history.red_team
+            : gameState.event_history.blue_team
+          ).map((event, idx) => {
+            if (event.event_type === 'hint_given' && event.hint) {
+              return (
+                <div
+                  key={`event-${idx}`}
+                  className={`p-2 rounded ${
+                    team === 'RED' ? 'bg-red-100' : 'bg-blue-100'
+                  }`}
+                >
+                  Hint: {event.hint.word} {event.hint.card_amount}
+                </div>
+              )
+            } else if (event.event_type === 'guess_made' && event.guess) {
+              const correctText = event.guess.correct ? '✓ Correct' : '✗ Wrong'
+              return (
+                <div
+                  key={`event-${idx}`}
+                  className='p-2 rounded bg-gray-50 text-sm'
+                >
+                  Guessed: {event.guess.guessed_card.word} - {correctText}
+                </div>
+              )
+            } else if (event.event_type === 'turn_passed') {
+              return (
+                <div
+                  key={`event-${idx}`}
+                  className='p-2 rounded bg-gray-50 text-sm'
+                >
+                  Passed turn
+                </div>
+              )
+            } else if (event.event_type === 'chat_message' && event.message) {
+              return (
+                <div
+                  key={`event-${idx}`}
+                  className='p-2 rounded bg-blue-50 text-sm italic'
+                >
+                  {event.actor.name}: {event.message}
+                </div>
+              )
+            }
+            return null
+          })}
+        {(!gameState.event_history ||
+          (team === 'RED'
+            ? gameState.event_history.red_team.length === 0
+            : gameState.event_history.blue_team.length === 0)) && (
+          <div className='text-gray-400 text-sm'>No activity yet</div>
+        )}
       </div>
 
       {shouldShowGuessMessage ? (
