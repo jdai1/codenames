@@ -1524,6 +1524,18 @@ function ChatHistory({
             }
             return null
           })}
+          {gameState.is_game_over && gameState.winner && gameState.winner.team_color === team && (
+          <div
+            className={`px-4 py-3 rounded-lg shadow-lg text-center font-bold text-lg ${
+              team === 'RED'
+                ? 'bg-gradient-to-br from-red-200 to-red-300 border-2 border-red-400 text-red-800'
+                : 'bg-gradient-to-br from-cyan-200 to-cyan-300 border-2 border-cyan-400 text-cyan-800'
+            }`}
+          >
+            🎉 {team} TEAM WINS!
+          </div>
+        )}
+        
         {(() => {
           const noTeamActivity =
             !gameState.event_history ||
@@ -1547,6 +1559,7 @@ function ChatHistory({
               </div>
             )
           }
+          
           return (
             <div className='text-gray-400 text-sm text-center py-8'>
               No activity yet
