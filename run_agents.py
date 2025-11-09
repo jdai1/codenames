@@ -89,6 +89,11 @@ def spymaster_turn(
     result, assistant_msg, _, _ = spymaster.run(
         user_message=user_msg, message_history=message_history
     )
+    reasoning = (assistant_msg.get("reasoning_content") or "").strip()
+    visible = (assistant_msg.get("content") or "").strip()
+    combined_message = "\n\n".join(part for part in (reasoning, visible) if part)
+    if combined_message:
+        message_history.append({"role": "assistant", "content": combined_message})
     if result.get("type") != "hint":
         return False, {"reason": f"unexpected result: {result}"}
 
@@ -349,6 +354,8 @@ def main():
         else:
             ops = blue_ops if team_key == "BLUE" else red_ops
             guesser_turn(game, ops, operative_histories[team_key])
+
+        breakpoint()
 
         # Print a light summary of board progress
         s = game.get_state(show_colors=False)
