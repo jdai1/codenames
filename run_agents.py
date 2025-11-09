@@ -12,6 +12,7 @@ from agents.prompts import (
 )
 
 from engine.game_main import CodenamesGame, GameStateResponse
+from engine.game.events import LLMActor
 
 
 def _name(val: Any) -> str:
@@ -94,8 +95,12 @@ def spymaster_turn(
 
     clue = result.get("clue")
     qty = int(result.get("quantity", 1))
+
+    # Create LLM actor for this spymaster
+    actor = LLMActor(name=spymaster.name, model=spymaster.model)
+
     try:
-        hint_res = game.give_hint(word=clue, card_amount=qty)
+        hint_res = game.give_hint(word=clue, card_amount=qty, actor=actor)
     except Exception as e:  # pylint: disable=broad-except
         return False, {"reason": f"hint rejected: {e}", "clue": clue, "quantity": qty}
     if not hint_res.success:
@@ -213,11 +218,15 @@ def guesser_turn(
                     list(votes_by_agent.values()), quorum=len(ops)
                 )
                 if majority:
+                    # Create LLM actor representing the team consensus
+                    # Use first operative as representative
+                    actor = LLMActor(name=f"{team_turn.name}-team", model=ops[0].model)
+
                     if majority == "pass":
                         # Majority agrees to pass
                         vote_summary = formatted_votes()
                         try:
-                            _ = game.pass_turn()
+                            _ = game.pass_turn(actor=actor)
                         except Exception as e:  # pylint: disable=broad-except
                             message_history.append(
                                 {
@@ -240,7 +249,7 @@ def guesser_turn(
                         guess_word = majority
                         vote_summary = formatted_votes()
                         try:
-                            guess_res = game.make_guess(word=guess_word)
+                            guess_res = game.make_guess(word=guess_word, actor=actor)
                         except Exception as e:  # pylint: disable=broad-except
                             message_history.append(
                                 {
@@ -287,8 +296,9 @@ def guesser_turn(
                         break  # break inner loop to start a new guess cycle within same turn
 
         # Reached here with no majority across all rounds -> pass the turn
+        actor = LLMActor(name=f"{team_turn.name}-team", model=ops[0].model)
         try:
-            _ = game.pass_turn()
+            _ = game.pass_turn(actor=actor)
         except Exception as e:  # pylint: disable=broad-except
             message_history.append(
                 {"role": "assistant", "content": f"system: pass failed: {e}"}

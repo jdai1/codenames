@@ -8,6 +8,16 @@ from engine.game.base import BaseModel, WordGroup, canonical_format
 from engine.game.board import Board
 from engine.game.card import Card
 from engine.game.color import CardColor, TeamColor
+from engine.game.events import (
+    Actor,
+    ChatEvent,
+    GameHistory,
+    GuessEvent,
+    HintEvent,
+    LLMActor,
+    PassEvent,
+    UserActor,
+)
 from engine.game.exceptions import (
     CardNotFoundError,
     GameIsOver,
@@ -42,6 +52,12 @@ class BaseGameState(BaseModel):
     current_player_role: PlayerRole = PlayerRole.HINTER
     given_hints: List[GivenHint] = []
     given_guesses: List[GivenGuess] = []
+    history: GameHistory = None
+
+    def __init__(self, **data):
+        if 'history' not in data or data['history'] is None:
+            data['history'] = GameHistory()
+        super().__init__(**data)
 
     class Config:
         abstract = True
@@ -70,6 +86,12 @@ class GameState(BaseGameState):
     winner: Optional[Winner] = None
     raw_hints: List[Hint] = []
 
+    # Message histories for LLM agents
+    blue_team_operative_history: List[Dict] = []
+    blue_team_spymaster_history: List[Dict] = []
+    red_team_operative_history: List[Dict] = []
+    red_team_spymaster_history: List[Dict] = []
+
     @property
     def hinter_state(self) -> HinterGameState:
         return HinterGameState(
@@ -79,6 +101,7 @@ class GameState(BaseGameState):
             current_player_role=self.current_player_role,
             given_hints=self.given_hints,
             given_guesses=self.given_guesses,
+            history=self.history,
         )
 
     @property
@@ -91,6 +114,7 @@ class GameState(BaseGameState):
             given_hints=self.given_hints,
             given_guesses=self.given_guesses,
             left_guesses=self.left_guesses,
+            history=self.history,
         )
 
     @property
@@ -101,16 +125,52 @@ class GameState(BaseGameState):
     def is_game_over(self) -> bool:
         return self.winner is not None
 
-    def process_hint(self, hint: Hint) -> Optional[GivenHint]:
+    def get_message_history(self, team_color: TeamColor, role: PlayerRole) -> List[Dict]:
+        """Get message history for a specific team and role."""
+        if team_color == TeamColor.BLUE:
+            if role == PlayerRole.HINTER:
+                return self.blue_team_spymaster_history
+            else:
+                return self.blue_team_operative_history
+        else:
+            if role == PlayerRole.HINTER:
+                return self.red_team_spymaster_history
+            else:
+                return self.red_team_operative_history
+
+    def record_chat_message(
+        self,
+        actor: Actor,
+        message: str,
+        team_color: Optional[TeamColor] = None,
+        player_role: Optional[PlayerRole] = None,
+        message_metadata: Optional[Dict] = None,
+    ) -> None:
+        """
+        Record a chat message from an actor (user or LLM).
+
+        Args:
+            actor: The actor (UserActor or LLMActor) sending the message
+            message: The chat message content
+            team_color: Team color (defaults to current_team_color)
+            player_role: Player role (defaults to current_player_role)
+            message_metadata: Optional metadata (reasoning, tool calls, etc.)
+        """
+        chat_event = ChatEvent(
+            team_color=team_color or self.current_team_color,
+            player_role=player_role or self.current_player_role,
+            actor=actor,
+            message=message,
+            message_metadata=message_metadata,
+        )
+        self.history.add_event(chat_event)
+
+    def process_hint(self, hint: Hint, actor: Actor) -> GivenHint:
         if self.is_game_over:
             raise GameIsOver()
         if self.current_player_role != PlayerRole.HINTER:
             raise InvalidTurn("It's not the Hinter's turn now!")
         self.raw_hints.append(hint)
-        if hint.card_amount == QUIT_GAME:
-            log.info("Hinter quit the game")
-            self._team_quit()
-            return None
         formatted_hint_word = canonical_format(hint.word)
         if formatted_hint_word in self.illegal_hint_words:
             raise InvalidHint("Hint word is on board or was already used!")
@@ -119,27 +179,50 @@ class GameState(BaseGameState):
         )
         log.info(f"Hinter: {wrap(hint.word)} {hint.card_amount} card(s)")
         self.given_hints.append(given_hint)
+
+        # Record hint event
+        hint_event = HintEvent(
+            team_color=self.current_team_color,
+            player_role=self.current_player_role,
+            actor=actor,
+            hint=given_hint,
+        )
+        self.history.add_event(hint_event)
+
         self.left_guesses = given_hint.card_amount + 1
         self.current_player_role = PlayerRole.GUESSER
         return given_hint
 
-    def process_guess(self, guess: Guess) -> Optional[GivenGuess]:
+    def process_pass(self, actor: Actor) -> None:
+        """Process a pass action by the guesser."""
+        if self.is_game_over:
+            raise GameIsOver()
+        if self.current_player_role != PlayerRole.GUESSER:
+            raise InvalidTurn("It's not the Guesser's turn now!")
+        log.info("Guesser passed the turn")
+        self._end_turn(record_pass=True, actor=actor)
+
+    def process_guess(self, guess: Guess, actor: Actor) -> GivenGuess:
         if self.is_game_over:
             raise GameIsOver()
         if self.current_player_role != PlayerRole.GUESSER:
             raise InvalidTurn("It's not the Guesser's turn now!")
         if guess.card_index == PASS_GUESS:
-            log.info("Guesser passed the turn")
-            self._end_turn()
-            return None
-        if guess.card_index == QUIT_GAME:
-            log.info("Guesser quit the game")
-            self._team_quit()
-            return None
+            raise InvalidGuess("Use process_pass() to pass the turn!")
         guessed_card = self._reveal_guessed_card(guess)
         given_guess = GivenGuess(given_hint=self.last_given_hint, guessed_card=guessed_card)
         log.info(f"Guesser: {given_guess}")
         self.given_guesses.append(given_guess)
+
+        # Record guess event
+        guess_event = GuessEvent(
+            team_color=self.current_team_color,
+            player_role=self.current_player_role,
+            actor=actor,
+            guess=given_guess,
+        )
+        self.history.add_event(guess_event)
+
         self._update_score(given_guess)
         if self.is_game_over:
             log.info("Winner found, turn is over")
@@ -166,16 +249,22 @@ class GameState(BaseGameState):
         guessed_card.revealed = True
         return guessed_card
 
-    def _end_turn(self, switch_role: bool = True):
+    def _end_turn(self, switch_role: bool = True, record_pass: bool = False, actor: Optional[Actor] = None):
+        if record_pass:
+            # Record pass event
+            if actor is None:
+                raise ValueError("Actor is required when recording pass event")
+            pass_event = PassEvent(
+                team_color=self.current_team_color,
+                player_role=self.current_player_role,
+                actor=actor,
+            )
+            self.history.add_event(pass_event)
+
         self.left_guesses = 0
         self.current_team_color = self.current_team_color.opponent
         if switch_role:
             self.current_player_role = self.current_player_role.other
-
-    def _team_quit(self):
-        winner_color = self.current_team_color.opponent
-        self.winner = Winner(team_color=winner_color, reason=WinningReason.OPPONENT_QUIT)
-        self._end_turn()
 
     def _update_score(self, given_guess: GivenGuess):
         card_color = given_guess.guessed_card.color

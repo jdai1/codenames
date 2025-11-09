@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
 """Flask API server for Codenames game."""
 
-import json
-import time
-import random
 import random
 from typing import Dict
 
-from flask import Flask, Response, jsonify, request, stream_with_context
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 from engine.game_main import CodenamesGame
-from engine.schema import ReasoningToken, ReasoningTokenType
+from engine.game.events import UserActor
+from run_agents import (
+    build_operatives,
+    build_spymaster,
+    spymaster_turn,
+    guesser_turn,
+    _name,
+)
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for frontend
@@ -111,8 +115,11 @@ def give_hint(game_id: str):
     if not data or "word" not in data or "card_amount" not in data:
         return jsonify({"error": "Missing required fields: word, card_amount"}), 400
 
+    # Create actor for human player
+    actor = UserActor(name="Human Player")
+
     try:
-        result = game.give_hint(data["word"], data["card_amount"])
+        result = game.give_hint(data["word"], data["card_amount"], actor=actor)
         return jsonify(result.dict())
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
@@ -137,8 +144,11 @@ def make_guess(game_id: str):
     if not data or "word" not in data:
         return jsonify({"error": "Missing required field: word"}), 400
 
+    # Create actor for human player
+    actor = UserActor(name="Human Player")
+
     try:
-        result = game.make_guess(data["word"])
+        result = game.make_guess(data["word"], actor=actor)
         return jsonify(result.dict())
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
@@ -152,8 +162,11 @@ def pass_turn(game_id: str):
 
     game = games[game_id]
 
+    # Create actor for human player
+    actor = UserActor(name="Human Player")
+
     try:
-        result = game.pass_turn()
+        result = game.pass_turn(actor=actor)
         return jsonify(result.dict())
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
@@ -162,149 +175,96 @@ def pass_turn(game_id: str):
 @app.route("/games/<game_id>/ai/hint", methods=["POST"])
 def ai_give_hint(game_id: str):
     """
-    AI generates and gives a hint (Spymaster action) with streaming.
+    AI generates and gives a hint (Spymaster action).
 
-    Body: {} (optional AI config)
+    Body: {"model": "gpt-4"} (optional, default: gpt-4)
 
-    Response: Server-Sent Events stream of ReasoningToken objects
-        ReasoningToken = {
-            "type": "give-hint-reasoning" | "give-hint-result" | "error",
-            "content": str | HintResult
-        }
-
-        Example reasoning token: {"type": "give-hint-reasoning", "content": "Analyzing board..."}
-        Example result token: {"type": "give-hint-result", "content": {...HintResult...}}
+    Response: HintResult or error
     """
     if game_id not in games:
         return jsonify({"error": "Game not found"}), 404
 
     game = games[game_id]
+    data = request.get_json() or {}
+    model = data.get("model", "gpt-4")
 
-    def generate():
-        # TODO: Replace with actual AI agent function that yields ReasoningTokens
-        # For now, simulate reasoning tokens
-        token1 = ReasoningToken(
-            type=ReasoningTokenType.GIVE_HINT_REASONING, content="Analyzing board..."
-        )
-        yield json.dumps(token1.dict()) + "\n\n"
-        time.sleep(0.5)
+    try:
+        # Build spymaster agent using the same primitive as run_agents.py
+        state = game.get_state(show_colors=True)
+        team = state.current_turn.team
+        spymaster = build_spymaster(team_name=_name(team), model=model)
 
-        token2 = ReasoningToken(
-            type=ReasoningTokenType.GIVE_HINT_REASONING,
-            content="Identifying patterns...",
-        )
-        yield json.dumps(token2.dict()) + "\n\n"
-        time.sleep(0.5)
+        # Get message history from game state
+        message_history = game.state.get_message_history(team, game.state.current_player_role)
 
-        token3 = ReasoningToken(
-            type=ReasoningTokenType.GIVE_HINT_REASONING, content="Generating hint..."
-        )
-        yield json.dumps(token3.dict()) + "\n\n"
-        time.sleep(0.5)
+        # Use the high-level spymaster_turn function from run_agents.py
+        success, result_info = spymaster_turn(game, spymaster, message_history)
 
-        # Placeholder: Generate hint
-        word = "placeholder"
-        card_amount = 2
+        if not success:
+            return jsonify({"error": result_info.get("reason", "Hint failed")}), 400
 
-        # Apply hint to game
-        try:
-            result = game.give_hint(word, card_amount)
-            result_token = ReasoningToken(
-                type=ReasoningTokenType.GIVE_HINT_RESULT, content=result.dict()
-            )
-            yield json.dumps(result_token.dict()) + "\n\n"
-        except ValueError as e:
-            error_token = ReasoningToken(
-                type=ReasoningTokenType.ERROR, content=str(e))
-            yield json.dumps(error_token.dict()) + "\n\n"
+        # Return success response with hint details
+        return jsonify({
+            "success": True,
+            "hint": {
+                "word": result_info["clue"],
+                "card_amount": result_info["quantity"],
+                "team_color": _name(team)
+            },
+            "left_guesses": game.state.left_guesses
+        })
 
-    return Response(
-        stream_with_context(generate()),
-        mimetype="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": f"Internal error: {str(e)}"}), 500
 
 
 @app.route("/games/<game_id>/ai/guess", methods=["POST"])
 def ai_make_guess(game_id: str):
     """
-    AI generates and makes a guess (Operative action) with streaming.
+    AI generates and makes a guess (Operative action).
 
-    Body: {} (optional AI config)
+    Body: {"model": "gpt-4", "n_operatives": 1} (optional, defaults)
 
-    Response: Server-Sent Events stream of ReasoningToken objects
-        ReasoningToken = {
-            "type": "make-guess-reasoning" | "make-guess-result" | "error",
-            "content": str | GuessResult
-        }
-
-        Example reasoning token: {"type": "make-guess-reasoning", "content": "Evaluating cards..."}
-        Example result token: {"type": "make-guess-result", "content": {...GuessResult...}}
+    Response: Success message or error
     """
     if game_id not in games:
         return jsonify({"error": "Game not found"}), 404
 
     game = games[game_id]
+    data = request.get_json() or {}
+    model = data.get("model", "gpt-4")
+    n_operatives = data.get("n_operatives", 1)
 
-    def generate():
-        # TODO: Replace with actual AI agent function that yields ReasoningTokens
-        # For now, simulate reasoning tokens
-        token1 = ReasoningToken(
-            type=ReasoningTokenType.MAKE_GUESS_REASONING, content="Processing hint..."
-        )
-        yield f"data: {json.dumps(token1.dict())}\n\n"
-        time.sleep(0.5)
+    try:
+        # Build operative agents using the same primitive as run_agents.py
+        state = game.get_state(show_colors=False)
+        team = state.current_turn.team
+        operatives = build_operatives(team_name=_name(team), model=model, n=n_operatives)
 
-        token2 = ReasoningToken(
-            type=ReasoningTokenType.MAKE_GUESS_REASONING, content="Evaluating cards..."
-        )
-        yield f"data: {json.dumps(token2.dict())}\n\n"
-        time.sleep(0.5)
+        # Get message history from game state
+        message_history = game.state.get_message_history(team, game.state.current_player_role)
 
-        token3 = ReasoningToken(
-            type=ReasoningTokenType.MAKE_GUESS_REASONING, content="Making decision..."
-        )
-        yield f"data: {json.dumps(token3.dict())}\n\n"
-        time.sleep(0.5)
+        # Use the high-level guesser_turn function from run_agents.py
+        # This handles the full guessing logic including voting, multiple guesses, etc.
+        guesser_turn(game, operatives, message_history, max_rounds=25)
 
-        # Placeholder: Pick first unrevealed card
-        board = game.get_board(show_colors=False)
-        unrevealed = [card for card in board if not card.revealed]
+        # Return success - guesser_turn handles all the guessing internally
+        return jsonify({
+            "success": True,
+            "message": "Guesser turn completed",
+            "current_turn": {
+                "team": _name(game.state.current_team_color),
+                "role": game.state.current_player_role.value
+            },
+            "is_game_over": game.is_game_over()
+        })
 
-        guess_word = unrevealed[0].word if unrevealed else None
-
-        if guess_word:
-            # Apply guess to game
-            try:
-                result = game.make_guess(guess_word)
-                result_token = ReasoningToken(
-                    type=ReasoningTokenType.MAKE_GUESS_RESULT, content=result.dict()
-                )
-                yield f"data: {json.dumps(result_token.dict())}\n\n"
-            except ValueError as e:
-                error_token = ReasoningToken(
-                    type=ReasoningTokenType.ERROR, content=str(e)
-                )
-                yield f"data: {json.dumps(error_token.dict())}\n\n"
-        else:
-            # Pass if no cards left
-            try:
-                result = game.pass_turn()
-                result_token = ReasoningToken(
-                    type=ReasoningTokenType.MAKE_GUESS_RESULT, content=result.dict()
-                )
-                yield f"data: {json.dumps(result_token.dict())}\n\n"
-            except ValueError as e:
-                error_token = ReasoningToken(
-                    type=ReasoningTokenType.ERROR, content=str(e)
-                )
-                yield f"data: {json.dumps(error_token.dict())}\n\n"
-
-    return Response(
-        stream_with_context(generate()),
-        mimetype="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": f"Internal error: {str(e)}"}), 500
 
 
 if __name__ == "__main__":

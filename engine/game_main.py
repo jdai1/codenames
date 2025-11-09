@@ -5,6 +5,7 @@ from typing import Optional, List
 from uuid import uuid4
 
 from engine.boards.builder import generate_board, SupportedLanguage
+from engine.game.events import Actor, UserActor, LLMActor
 from engine.game.state import GameState, new_game_state
 from engine.game.move import Hint, Guess, PASS_GUESS
 from engine.game.player import PlayerRole
@@ -195,13 +196,14 @@ class CodenamesGame:
 
     # ===== Game Actions =====
 
-    def give_hint(self, word: str, card_amount: int) -> HintResult:
+    def give_hint(self, word: str, card_amount: int, actor: Actor) -> HintResult:
         """
         Give a hint (spymaster action).
 
         Args:
             word: The hint word
             card_amount: Number of cards the hint refers to
+            actor: Actor (UserActor or LLMActor) giving the hint
 
         Returns:
             Hint result
@@ -213,10 +215,7 @@ class CodenamesGame:
             raise ValueError("Not the hinter's turn")
 
         hint = Hint(word=word, card_amount=card_amount)
-        given_hint = self.state.process_hint(hint)
-
-        if given_hint is None:
-            return HintResult(success=False, reason="quit")
+        given_hint = self.state.process_hint(hint, actor=actor)
 
         return HintResult(
             success=True,
@@ -224,12 +223,13 @@ class CodenamesGame:
             left_guesses=self.state.left_guesses
         )
 
-    def make_guess(self, word: str) -> GuessResult:
+    def make_guess(self, word: str, actor: Actor) -> GuessResult:
         """
         Make a guess (operative action).
 
         Args:
             word: The word on the card to guess
+            actor: Actor (UserActor or LLMActor) making the guess
 
         Returns:
             Guess result including whether guess was correct
@@ -254,10 +254,7 @@ class CodenamesGame:
 
         # Make the guess
         guess = Guess(card_index=card_index)
-        given_guess = self.state.process_guess(guess)
-
-        if given_guess is None:
-            return GuessResult(success=False, reason="pass or quit")
+        given_guess = self.state.process_guess(guess, actor=actor)
 
         return GuessResult(
             success=True,
@@ -268,9 +265,12 @@ class CodenamesGame:
             winner=self.get_winner()
         )
 
-    def pass_turn(self) -> PassResult:
+    def pass_turn(self, actor: Actor) -> PassResult:
         """
         Pass the turn (operative decides to stop guessing).
+
+        Args:
+            actor: Actor (UserActor or LLMActor) passing the turn
 
         Returns:
             Pass result
@@ -278,8 +278,7 @@ class CodenamesGame:
         if self.state.current_player_role != PlayerRole.GUESSER:
             raise ValueError("Can only pass during guesser's turn")
 
-        guess = Guess(card_index=PASS_GUESS)
-        self.state.process_guess(guess)
+        self.state.process_pass(actor=actor)
 
         return PassResult(
             success=True,
