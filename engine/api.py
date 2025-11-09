@@ -273,8 +273,11 @@ def ai_make_guess(game_id: str):
             # This handles the full guessing logic including voting, multiple guesses, etc.
             # It now yields events as they happen
             for event in guesser_turn(game, operatives, message_history, max_rounds=25):
-                # Send event as SSE
-                yield "data: " + json.dumps(event.dict()) + "\n\n"
+                # Send event as SSE - convert datetime to string for JSON serialization
+                event_dict = event.dict()
+                if 'timestamp' in event_dict and event_dict['timestamp']:
+                    event_dict['timestamp'] = event_dict['timestamp'].isoformat()
+                yield "data: " + json.dumps(event_dict) + "\n\n"
 
             # Send final completion event
             yield "data: " + json.dumps({
