@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { cva } from 'class-variance-authority'
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 const API_URL = 'http://localhost:8080'
 
@@ -272,7 +272,13 @@ function Game() {
       {gameState && (
         <div className='grid grid-cols-5 h-full'>
           <div className='col-span-1 bg-gray-100'>
-            <ChatHistory team='RED' gameState={gameState} />
+            <ChatHistory
+              team='RED'
+              gameState={gameState}
+              gameType={gameType.red}
+              gameId={gameId!}
+              onHintSubmitted={() => setSpymasterView(false)}
+            />
           </div>
           <div className='col-span-3 bg-gray-200 p-4'>
             <div
@@ -291,7 +297,13 @@ function Game() {
             </div>
           </div>
           <div className='col-span-1 bg-gray-100'>
-            <ChatHistory team='BLUE' gameState={gameState} />
+            <ChatHistory
+              team='BLUE'
+              gameState={gameState}
+              gameType={gameType.blue}
+              gameId={gameId!}
+              onHintSubmitted={() => setSpymasterView(false)}
+            />
           </div>
         </div>
       )}
@@ -318,12 +330,73 @@ const TEAM_NAME_TO_COLOR = {
 type ChatHistoryProps = {
   team: 'RED' | 'BLUE'
   gameState: GameState
+  gameType: { spymaster: PlayerTypeId; guesser: PlayerTypeId }
+  gameId: string
+  onHintSubmitted: () => void
 }
 
-function ChatHistory({ team, gameState }: ChatHistoryProps) {
+function ChatHistory({
+  team,
+  gameState,
+  gameType,
+  gameId,
+  onHintSubmitted,
+}: ChatHistoryProps) {
   const [hint, setHint] = useState('')
+  const [hintCount, setHintCount] = useState('')
+  const hintInputRef = useRef<HTMLInputElement>(null)
+  const queryClient = useQueryClient()
 
   const score = team === 'RED' ? gameState.score.red : gameState.score.blue
+
+  const isCurrentTeam = gameState.current_turn.team === team
+  const isSpymasterTurn =
+    isCurrentTeam && gameState.current_turn.role === 'HINTER'
+  const isHumanSpymaster = gameType.spymaster === 'HUMAN'
+  const shouldEnableHintInput = isSpymasterTurn && isHumanSpymaster
+
+  const giveHintMutation = useMutation({
+    mutationFn: async ({
+      word,
+      card_amount,
+    }: {
+      word: string
+      card_amount: number
+    }) => {
+      const response = await fetch(new URL(`/games/${gameId}/hint`, API_URL), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ word, card_amount }),
+      })
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to give hint')
+      }
+      return response.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['gameState', gameId] })
+      queryClient.invalidateQueries({ queryKey: ['gameStateFull', gameId] })
+      setHint('')
+      setHintCount('')
+      onHintSubmitted() // Turn off spymaster view
+    },
+  })
+
+  const handleSubmitHint = () => {
+    const count = parseInt(hintCount)
+    if (!hint || !count || count < 1) return
+    giveHintMutation.mutate({ word: hint, card_amount: count })
+  }
+
+  // Focus the input when it becomes enabled (human hinter's turn)
+  useEffect(() => {
+    if (shouldEnableHintInput && hintInputRef.current) {
+      hintInputRef.current.focus()
+    }
+  }, [shouldEnableHintInput])
 
   return (
     <div className='p-4 flex flex-col h-full gap-4'>
@@ -335,15 +408,49 @@ function ChatHistory({ team, gameState }: ChatHistoryProps) {
         <div className='p-2 bg-red-100 rounded'>Hint: automobile 6</div>
       </div>
 
-      <input
-        type='text'
-        className='border border-gray-300 p-2'
-        value={hint}
-        onChange={(event) => setHint(event.target.value)}
-      />
+      <div className='flex gap-2'>
+        <input
+          ref={hintInputRef}
+          type='text'
+          className='border border-gray-300 p-2 grow min-w-0'
+          value={hint}
+          onChange={(event) => setHint(event.target.value)}
+          disabled={!shouldEnableHintInput}
+          placeholder={shouldEnableHintInput ? 'Enter hint word' : ''}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && hint && hintCount) {
+              handleSubmitHint()
+            }
+          }}
+        />
 
-      <button className='rounded bg-teal-500 p-2' disabled={!hint}>
-        Submit hint
+        <input
+          type='number'
+          className='border border-gray-300 p-2 w-16'
+          value={hintCount}
+          onChange={(event) => setHintCount(event.target.value)}
+          disabled={!shouldEnableHintInput}
+          placeholder={shouldEnableHintInput ? '#' : ''}
+          min='1'
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && hint && hintCount) {
+              handleSubmitHint()
+            }
+          }}
+        />
+      </div>
+
+      <button
+        className='rounded bg-teal-500 p-2'
+        disabled={
+          !hint ||
+          !hintCount ||
+          !shouldEnableHintInput ||
+          giveHintMutation.isPending
+        }
+        onClick={handleSubmitHint}
+      >
+        {giveHintMutation.isPending ? 'Submitting...' : 'Submit hint'}
       </button>
     </div>
   )
