@@ -255,7 +255,8 @@ function Game() {
     if (playerType === 'ZAI_4_6') return 'zai-4.6'
     if (playerType === 'OPENAI_OSS') return 'openai oss'
     if (playerType === 'QWEN_3_235B') return 'qwen 3 235b'
-    if (playerType === 'DEEPSEEK_V3_2_EXP_THINKING') return 'deepseek v3.2-exp-thinking'
+    if (playerType === 'DEEPSEEK_V3_2_EXP_THINKING')
+      return 'deepseek v3.2-exp-thinking'
     if (playerType === 'LLAMA_3_1_405B') return 'llama 3.1 405b'
     return 'gpt-4.1' // default
   }
@@ -773,7 +774,7 @@ function Game() {
       <div className='py-3 px-4 border-b border-gray-200 bg-white'>
         <div className='flex items-center justify-center gap-8'>
           <div className='flex items-center gap-3'>
-            <span className='text-red-600 font-semibold text-sm'>Red</span>
+            <span className='text-red-600 font-semibold text-lg'>Red</span>
             <PlayerTypeSelect
               value={gameType.red.spymaster}
               onChange={(value: PlayerTypeId) =>
@@ -795,7 +796,7 @@ function Game() {
             {gameType.red.guesser !== 'HUMAN' && (
               <input
                 type='number'
-                className='border border-gray-300 p-1.5 w-12 text-xs rounded'
+                className='border border-gray-300 p-1.5 w-12 text-md rounded'
                 value={redOperators}
                 onChange={(e) => setRedOperators(parseInt(e.target.value) || 1)}
                 min='1'
@@ -804,7 +805,7 @@ function Game() {
           </div>
 
           <button
-            className='rounded bg-amber-400 hover:bg-amber-500 transition-colors px-4 py-1.5 text-sm font-medium'
+            className='rounded bg-amber-400 hover:bg-amber-500 transition-colors px-4 py-1.5 text-md font-medium'
             onClick={() => {
               createNewGame.mutate()
             }}
@@ -814,7 +815,7 @@ function Game() {
           </button>
 
           <div className='flex items-center gap-3'>
-            <span className='text-blue-600 font-semibold text-sm'>Blue</span>
+            <span className='text-blue-600 font-semibold text-lg'>Blue</span>
             <PlayerTypeSelect
               value={gameType.blue.spymaster}
               onChange={(value: PlayerTypeId) =>
@@ -836,7 +837,7 @@ function Game() {
             {gameType.blue.guesser !== 'HUMAN' && (
               <input
                 type='number'
-                className='border border-gray-300 p-1.5 w-12 text-xs rounded'
+                className='border border-gray-300 p-1.5 w-12 text-md rounded'
                 value={blueOperators}
                 onChange={(e) =>
                   setBlueOperators(parseInt(e.target.value) || 1)
@@ -849,10 +850,11 @@ function Game() {
 
         {gameState && (
           <div className='flex items-center justify-center mt-2'>
-            <div className='text-sm text-gray-600'>
+            <div className='text-lg text-gray-600'>
               {gameState.is_game_over && gameState.winner ? (
                 <span className='font-semibold text-green-600'>
-                  🎉 {gameState.winner.team_color} wins - {gameState.winner.reason}
+                  🎉 {gameState.winner.team_color} wins -{' '}
+                  {gameState.winner.reason}
                 </span>
               ) : (
                 <>
@@ -941,14 +943,26 @@ function Game() {
   )
 }
 
-const TEAM_NAME_TO_LABEL = {
-  RED: 'Red',
-  BLUE: 'Blue',
-}
-
 const TEAM_NAME_TO_COLOR = {
   RED: 'text-red-600',
   BLUE: 'text-cyan-700',
+}
+
+// Editable display names for each model/provider
+const MODEL_DISPLAY_NAME: Record<PlayerTypeId | 'HUMAN', string> = {
+  HUMAN: 'Human',
+  GPT4_1: 'GPT 4.1',
+  GEMINI: 'Gemini',
+  GPT5: 'GPT 5',
+  CLAUDE_SONNET: 'Claude',
+  GEMINI_2_5_PRO: 'Gemini',
+  GROK_4: 'Grok',
+  KIMI_K2_THINKING: 'Kimi',
+  ZAI_4_6: 'Z.ai',
+  OPENAI_OSS: 'OpenAI OSS',
+  QWEN_3_235B: 'Qwen',
+  DEEPSEEK_V3_2_EXP_THINKING: 'DeepSeek',
+  LLAMA_3_1_405B: 'Llama',
 }
 
 type ChatHistoryProps = {
@@ -977,6 +991,14 @@ function ChatHistory({
   const [expandedTalkEvents, setExpandedTalkEvents] = useState<Set<number>>(
     new Set()
   )
+
+  const formatActorName = (name: string) => {
+    const match = name.match(/op-(\d+)/i)
+    if (match) {
+      return `Operative ${match[1]}`
+    }
+    return name
+  }
 
   const score = team === 'RED' ? gameState.score.red : gameState.score.blue
 
@@ -1210,7 +1232,7 @@ function ChatHistory({
                   key={`event-${idx}`}
                   className='p-2 rounded bg-cyan-100 text-sm italic'
                 >
-                  {event.actor.name}: {event.message}
+                  {formatActorName(event.actor.name)}: {event.message}
                 </div>
               )
             } else if (
@@ -1233,7 +1255,7 @@ function ChatHistory({
                   className='p-2 rounded bg-purple-50 text-sm italic'
                 >
                   <div className='font-semibold not-italic mb-1'>
-                    {event.actor.name}:
+                    {formatActorName(event.actor.name)}:
                   </div>
                   <div className='whitespace-pre-wrap'>{displayMessage}</div>
                   {hasMoreContent && (
@@ -1266,7 +1288,7 @@ function ChatHistory({
                   key={`event-${idx}`}
                   className='p-2 rounded bg-yellow-50 text-sm italic'
                 >
-                  {event.actor.name} voted: {event.message}
+                  {formatActorName(event.actor.name)} voted: {event.message}
                 </div>
               )
             } else if (
@@ -1279,7 +1301,8 @@ function ChatHistory({
                   key={`event-${idx}`}
                   className='p-2 rounded bg-green-50 text-sm italic'
                 >
-                  {event.actor.name} voted to pass: {event.message}
+                  {formatActorName(event.actor.name)} voted to pass:{' '}
+                  {event.message}
                 </div>
               )
             }
@@ -1294,11 +1317,7 @@ function ChatHistory({
           )}
 
         {aiLoading && aiLoading.team === team && (
-          <div
-            className={`p-2 rounded text-sm italic ${
-              team === 'RED' ? 'bg-red-50' : 'bg-cyan-100'
-            }`}
-          >
+          <div className={'p-2 rounded text-sm italic text-gray-500'}>
             {aiLoading.action === 'hint'
               ? 'AI is thinking of a hint...'
               : 'AI is making guesses...'}
@@ -1414,7 +1433,9 @@ function HeaderWithLogo({
   })()
 
   return (
-    <h2 className={`text-lg font-bold ${TEAM_NAME_TO_COLOR[team]} flex items-center gap-2`}>
+    <h2
+      className={`text-lg font-bold ${TEAM_NAME_TO_COLOR[team]} flex items-center gap-2`}
+    >
       {logoSrc ? (
         <img
           src={logoSrc}
@@ -1423,7 +1444,11 @@ function HeaderWithLogo({
         />
       ) : null}
       <span>
-        Team {TEAM_NAME_TO_LABEL[team]} {scoreText}
+        Team{' '}
+        {MODEL_DISPLAY_NAME[preferredType] ??
+          playerTypes[preferredType]?.label ??
+          'Unknown'}{' '}
+        {scoreText}
       </span>
     </h2>
   )
@@ -1491,7 +1516,7 @@ function Card({
   return (
     <div
       className={`${baseClasses} ${clickableClasses} ${disabledClasses} ${opacityClasses} p-8 flex flex-col justify-between items-stretch card-label gap-4 ${
-        label.length > 10 ? 'text-3xl' : 'text-4xl'
+        label.length > 10 ? 'text-[1.5vw]' : 'text-[1.75vw]'
       } border-8`}
       onClick={clickable && !revealed && onClick ? onClick : undefined}
     >
@@ -1499,16 +1524,24 @@ function Card({
         {(revealed || spymasterView) && (
           <span className='flex justify-center mb-2'>
             {type === 'RED' && (
-              <img src={'/red.svg'} alt='Red' className='h-16 w-16' />
+              <img src={'/red.svg'} alt='Red' className='h-[2vh] w-[2vw]' />
             )}
             {type === 'BLUE' && (
-              <img src={'/blue.svg'} alt='Blue' className='h-16 w-16' />
+              <img src={'/blue.svg'} alt='Blue' className='h-[2vh] w-[2vw]' />
             )}
             {type === 'ASSASSIN' && (
-              <img src={'/assassin.svg'} alt='Assassin' className='h-16 w-16' />
+              <img
+                src={'/assassin.svg'}
+                alt='Assassin'
+                className='h-[2vh] w-[2vw]'
+              />
             )}
             {type === 'NEUTRAL' && (
-              <img src={'/innocent.svg'} alt='Neutral' className='h-16 w-16' />
+              <img
+                src={'/innocent.svg'}
+                alt='Neutral'
+                className='h-[2vh] w-[2vw]'
+              />
             )}
           </span>
         )}
@@ -1565,7 +1598,7 @@ function PlayerTypeSelect({
 }) {
   return (
     <select
-      className='bg-gray-50 border border-gray-300 p-1.5 text-xs rounded hover:bg-gray-100 transition-colors cursor-pointer'
+      className='bg-gray-50 border border-gray-300 p-1.5 text-md rounded hover:bg-gray-100 transition-colors cursor-pointer'
       value={value}
       onChange={(event) => {
         onChange(event.target.value as PlayerTypeId)
