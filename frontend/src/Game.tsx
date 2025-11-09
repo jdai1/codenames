@@ -127,6 +127,22 @@ function Game() {
 
   const queryClient = useQueryClient()
 
+  // Keyboard shortcut: Press Cmd+K (Mac) or Ctrl+K (Windows/Linux) to toggle spymaster view
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setSpymasterView((prev) => !prev)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [])
+
   const createNewGame = useMutation({
     mutationFn: async () => {
       const response = await fetch(new URL('/games', API_URL), {
@@ -754,123 +770,100 @@ function Game() {
 
   return (
     <div className='flex flex-col h-screen'>
-      <div className='p-4'>
-        <div className='flex flex-col gap-4'>
-          <div className='flex gap-2 items-center'>
-            <span className='text-red-600 font-bold'>Red Team:</span>
-            <div className='flex gap-1 items-center'>
-              <label className='text-sm'>Spymaster:</label>
-              <PlayerTypeSelect
-                value={gameType.red.spymaster}
-                onChange={(value: PlayerTypeId) =>
-                  setGameType((prev: GameType) => ({
-                    ...prev,
-                    red: { ...prev.red, spymaster: value },
-                  }))
-                }
-              />
-            </div>
-            <div className='flex gap-1 items-center'>
-              <label className='text-sm'>Operator:</label>
-              <PlayerTypeSelect
-                value={gameType.red.guesser}
-                onChange={(value: PlayerTypeId) =>
-                  setGameType((prev: GameType) => ({
-                    ...prev,
-                    red: { ...prev.red, guesser: value },
-                  }))
-                }
-              />
+      <div className='py-3 px-4 border-b border-gray-200 bg-white'>
+        <div className='flex items-center justify-center gap-8'>
+          <div className='flex items-center gap-3'>
+            <span className='text-red-600 font-semibold text-sm'>Red</span>
+            <PlayerTypeSelect
+              value={gameType.red.spymaster}
+              onChange={(value: PlayerTypeId) =>
+                setGameType((prev: GameType) => ({
+                  ...prev,
+                  red: { ...prev.red, spymaster: value },
+                }))
+              }
+            />
+            <PlayerTypeSelect
+              value={gameType.red.guesser}
+              onChange={(value: PlayerTypeId) =>
+                setGameType((prev: GameType) => ({
+                  ...prev,
+                  red: { ...prev.red, guesser: value },
+                }))
+              }
+            />
+            {gameType.red.guesser !== 'HUMAN' && (
               <input
                 type='number'
-                className='border border-gray-300 p-2 w-16 text-sm rounded'
-                value={gameType.red.guesser === 'HUMAN' ? '' : redOperators}
+                className='border border-gray-300 p-1.5 w-12 text-xs rounded'
+                value={redOperators}
                 onChange={(e) => setRedOperators(parseInt(e.target.value) || 1)}
                 min='1'
-                placeholder='#'
-                disabled={gameType.red.guesser === 'HUMAN'}
               />
-            </div>
+            )}
           </div>
-          <div className='flex gap-2 items-center'>
-            <span className='text-cyan-700 font-bold'>Blue Team:</span>
-            <div className='flex gap-1 items-center'>
-              <label className='text-sm'>Spymaster:</label>
-              <PlayerTypeSelect
-                value={gameType.blue.spymaster}
-                onChange={(value: PlayerTypeId) =>
-                  setGameType((prev: GameType) => ({
-                    ...prev,
-                    blue: { ...prev.blue, spymaster: value },
-                  }))
-                }
-              />
-            </div>
-            <div className='flex gap-1 items-center'>
-              <label className='text-sm'>Operator:</label>
-              <PlayerTypeSelect
-                value={gameType.blue.guesser}
-                onChange={(value: PlayerTypeId) =>
-                  setGameType((prev: GameType) => ({
-                    ...prev,
-                    blue: { ...prev.blue, guesser: value },
-                  }))
-                }
-              />
-              <input
-                type='number'
-                className='border border-gray-300 p-2 w-16 text-sm rounded'
-                value={gameType.blue.guesser === 'HUMAN' ? '' : blueOperators}
-                onChange={(e) =>
-                  setBlueOperators(parseInt(e.target.value) || 1)
-                }
-                min='1'
-                placeholder='#'
-                disabled={gameType.blue.guesser === 'HUMAN'}
-              />
-            </div>
-          </div>
+
           <button
-            className='rounded border border-gray-300 p-2 px-4 self-start'
+            className='rounded bg-amber-400 hover:bg-amber-500 transition-colors px-4 py-1.5 text-sm font-medium'
             onClick={() => {
               createNewGame.mutate()
             }}
             disabled={createNewGame.isPending}
           >
-            {createNewGame.isPending ? 'Creating...' : 'Start new game'}
+            {createNewGame.isPending ? 'Creating...' : 'Start'}
           </button>
+
+          <div className='flex items-center gap-3'>
+            <span className='text-blue-600 font-semibold text-sm'>Blue</span>
+            <PlayerTypeSelect
+              value={gameType.blue.spymaster}
+              onChange={(value: PlayerTypeId) =>
+                setGameType((prev: GameType) => ({
+                  ...prev,
+                  blue: { ...prev.blue, spymaster: value },
+                }))
+              }
+            />
+            <PlayerTypeSelect
+              value={gameType.blue.guesser}
+              onChange={(value: PlayerTypeId) =>
+                setGameType((prev: GameType) => ({
+                  ...prev,
+                  blue: { ...prev.blue, guesser: value },
+                }))
+              }
+            />
+            {gameType.blue.guesser !== 'HUMAN' && (
+              <input
+                type='number'
+                className='border border-gray-300 p-1.5 w-12 text-xs rounded'
+                value={blueOperators}
+                onChange={(e) =>
+                  setBlueOperators(parseInt(e.target.value) || 1)
+                }
+                min='1'
+              />
+            )}
+          </div>
         </div>
 
         {gameState && (
-          <div className='flex items-center'>
-            <div className='flex gap-6 items-center justify-center'>
-              <div className='text-lg text-gray-600'>
-                Current Turn: {gameState.current_turn.team} -{' '}
-                {gameState.current_turn.role}
-                {gameState.current_turn.role === 'GUESSER' &&
-                  ` (${gameState.current_turn.left_guesses} guesses left)`}
-              </div>
-              {gameState.is_game_over && gameState.winner && (
-                <div className='text-lg font-bold text-green-600'>
-                  Game Over! Winner: {gameState.winner.team_color} -{' '}
-                  {gameState.winner.reason}
-                </div>
+          <div className='flex items-center justify-center mt-2'>
+            <div className='text-sm text-gray-600'>
+              {gameState.is_game_over && gameState.winner ? (
+                <span className='font-semibold text-green-600'>
+                  🎉 {gameState.winner.team_color} wins - {gameState.winner.reason}
+                </span>
+              ) : (
+                <>
+                  {gameState.current_turn.team} {gameState.current_turn.role}
+                  {gameState.current_turn.role === 'GUESSER' &&
+                    ` (${gameState.current_turn.left_guesses} left)`}
+                </>
               )}
             </div>
           </div>
         )}
-
-        <span className='flex gap-2 items-center'>
-          <label htmlFor='spymasterModeToggle'>Spymaster View</label>
-          <input
-            id='spymasterModeToggle'
-            className='w-6 h-6'
-            type='checkbox'
-            checked={spymasterView}
-            onChange={(e) => setSpymasterView(e.target.checked)}
-            disabled={!gameId}
-          />
-        </span>
       </div>
 
       {isLoading && (
@@ -1572,7 +1565,7 @@ function PlayerTypeSelect({
 }) {
   return (
     <select
-      className='bg-gray-100 p-2 rounded'
+      className='bg-gray-50 border border-gray-300 p-1.5 text-xs rounded hover:bg-gray-100 transition-colors cursor-pointer'
       value={value}
       onChange={(event) => {
         onChange(event.target.value as PlayerTypeId)
