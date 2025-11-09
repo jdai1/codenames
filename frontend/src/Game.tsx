@@ -597,7 +597,7 @@ function ChatHistory({
                 </div>
               )
             } else if (event.event_type === 'guess_made' && event.guess) {
-              const correctText = event.guess.correct ? '✓ Correct' : '✗ Wrong'
+              const correctText = event.correct ? '✓ Correct' : '✗ Wrong'
               return (
                 <div
                   key={`event-${idx}`}
