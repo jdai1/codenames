@@ -155,22 +155,6 @@ function Game() {
     guessWrongAudioRef.current = new Audio('/sfx/guess_wrong.mp3')
   }, [])
 
-  // Press 'p' to play a test flip sound
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() === 'p') {
-        try {
-          if (flipAudioRef.current) {
-            flipAudioRef.current.currentTime = 0
-            void flipAudioRef.current.play()
-          }
-        } catch (_err) {}
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
-
   // Attempt to unlock audio within a direct user gesture
   const unlockAudio = () => {
     // Use a temporary, muted element to satisfy gesture policy without touching our main refs
@@ -819,6 +803,38 @@ function Game() {
     return 'NEUTRAL'
   }
 
+  // Find the most recent hint for the given team (prefer event history, fallback to last_hint)
+  const getLatestHintForTeam = (
+    gs: GameState | null | undefined,
+    team: TeamColor
+  ): HintEventData | null => {
+    if (!gs) return null
+    const teamEvents =
+      team === 'RED'
+        ? gs.event_history?.red_team ?? []
+        : gs.event_history?.blue_team ?? []
+    const hintEvents = teamEvents.filter(
+      (e) => e.event_type === 'hint_given' && e.hint
+    )
+    if (hintEvents.length > 0) {
+      const latest = hintEvents.reduce((latestSoFar, ev) => {
+        if (!latestSoFar) return ev
+        const tA = Date.parse(ev.timestamp)
+        const tB = Date.parse(latestSoFar.timestamp)
+        return tA > tB ? ev : latestSoFar
+      }, null as GameEvent | null)
+      return latest?.hint ?? null
+    }
+    if (gs.last_hint && gs.last_hint.team === team) {
+      return {
+        word: gs.last_hint.word,
+        card_amount: gs.last_hint.card_amount,
+        team_color: gs.last_hint.team,
+      }
+    }
+    return null
+  }
+
   // Handler for card clicks (guesses)
   const handleCardGuess = async (word: string) => {
     if (!gameId || !gameState) return
@@ -978,20 +994,17 @@ function Game() {
 
         {gameState && (
           <div className='flex items-center justify-center mt-2'>
-            <div className='text-xl'>
+            <div className='text-2xl'>
               {gameState.is_game_over && gameState.winner ? (
                 <div className='flex items-center gap-2'>
                   <span
-                    className={`font-extrabold tracking-wide ${
+                    className={`font-extrabold text-3xl tracking-wide ${
                       gameState.winner.team_color === 'RED'
                         ? 'text-red-600'
                         : 'text-cyan-700'
                     }`}
                   >
                     {gameState.winner.team_color} WINS
-                  </span>
-                  <span className='text-gray-600 font-medium text-base'>
-                    • {gameState.winner.reason}
                   </span>
                 </div>
               ) : (
@@ -1008,10 +1021,33 @@ function Game() {
                       : 'OPERATIVE'}
                   </span>
                   {gameState.current_turn.role === 'GUESSER' && (
-                    <span className='text-gray-600 font-medium'>
-                      {' '}
-                      ({gameState.current_turn.left_guesses} left)
-                    </span>
+                    <>
+                      <span className='text-gray-600 font-medium'>
+                        {' '}
+                        ({gameState.current_turn.left_guesses} {gameState.current_turn.left_guesses === 1 ? 'guess' : 'guesses'} left)
+                      </span>
+                      {(() => {
+                        const hint = getLatestHintForTeam(
+                          gameState,
+                          gameState.current_turn.team
+                        )
+                        if (!hint) return null
+                        const teamClass =
+                          gameState.current_turn.team === 'RED'
+                            ? 'text-red-600'
+                            : 'text-cyan-700'
+                        return (
+                          <span className='text-gray-600 font-medium'>
+                            {' '}
+                            • Hint:{' '}
+                            <span className={`font-extrabold ${teamClass}`}>
+                              {hint.word.toUpperCase()}
+                            </span>{' '}
+                            ({hint.card_amount})
+                          </span>
+                        )
+                      })()}
+                    </>
                   )}
                 </>
               )}
@@ -1412,8 +1448,8 @@ function ChatHistory({
               event.message
             ) {
               const isExpanded = expandedTalkEvents.has(idx)
-              const first20Chars = event.message.substring(0, 50)
-              const hasMoreContent = event.message.length > 50
+              const first20Chars = event.message.substring(0, 250)
+              const hasMoreContent = event.message.length > 250
               const displayMessage = isExpanded
                 ? event.message
                 : hasMoreContent
@@ -1423,12 +1459,12 @@ function ChatHistory({
               return (
                 <div
                   key={`event-${idx}`}
-                  className='px-3 py-2.5 rounded-lg bg-gradient-to-br from-purple-50/40 to-gray-100/50 border border-purple-200/30 text-sm italic shadow-sm'
+                  className='px-3 py-3.5 rounded-lg bg-gradient-to-br from-purple-50/40 to-gray-100/50 border border-purple-200/30 text-sm italic shadow-sm'
                 >
                   <div className='font-semibold not-italic mb-1.5 text-purple-700/70'>
                     {formatActorName(event.actor.name)}:
                   </div>
-                  <div className='whitespace-pre-wrap text-gray-600'>
+                  <div className='whitespace-pre-wrap text-gray-600 leading-6'>
                     {displayMessage}
                   </div>
                   {hasMoreContent && (
