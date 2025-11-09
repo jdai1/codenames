@@ -1,0 +1,6 @@
+teams:
+  blue_model: "claude-sonnet-4-5-20250929"
+  red_model: "gpt-5"
+seed: 187231960
+operatives_per_team: 3
+output_file: "logs/claude-sonnet_gpt-5_3.json"

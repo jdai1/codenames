@@ -1,0 +1,6 @@
+teams:
+  blue_model: "deepseek/deepseek-reasoner"
+  red_model: "xai/grok-4-fast-reasoning"
+seed: 1800672587
+operatives_per_team: 3
+output_file: "logs/deepseek-v3-2-exp-thinking_grok-4_8.json"

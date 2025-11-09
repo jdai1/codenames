@@ -1,0 +1,6 @@
+teams:
+  blue_model: "gpt-5"
+  red_model: "xai/grok-4-fast-reasoning"
+seed: 1151485119
+operatives_per_team: 3
+output_file: "logs/gpt-5_grok-4_13.json"

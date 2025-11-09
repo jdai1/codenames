@@ -1,0 +1,6 @@
+teams:
+  blue_model: "claude-sonnet-4-5-20250929"
+  red_model: "moonshot/kimi-k2-thinking"
+seed: 874545028
+operatives_per_team: 3
+output_file: "logs/claude-sonnet_kimi-k2-thinking_5.json"

@@ -1,0 +1,26 @@
+{
+  "models": {
+    "BLUE": "xai/grok-4-fast-reasoning",
+    "RED": "moonshot/kimi-k2-thinking"
+  },
+  "winner": "BLUE",
+  "lost_to_assassin": true,
+  "hints": {
+    "BLUE": 1,
+    "RED": 1
+  },
+  "correct_guesses": {
+    "BLUE": 3,
+    "RED": 3
+  },
+  "cost": {
+    "BLUE": 0.0080745,
+    "RED": 0.0,
+    "total": 0.0080745
+  },
+  "tokens": {
+    "BLUE": 13566,
+    "RED": 0,
+    "total": 13566
+  }
+}

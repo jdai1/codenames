@@ -1,0 +1,6 @@
+teams:
+  blue_model: "claude-sonnet-4-5-20250929"
+  red_model: "xai/grok-4-fast-reasoning"
+seed: 1651321279
+operatives_per_team: 3
+output_file: "logs/claude-sonnet_grok-4_4.json"

@@ -1,0 +1,6 @@
+teams:
+  blue_model: "xai/grok-4-fast-reasoning"
+  red_model: "moonshot/kimi-k2-thinking"
+seed: 713389125
+operatives_per_team: 3
+output_file: "logs/grok-4_kimi-k2-thinking_15.json"

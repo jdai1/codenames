@@ -1,8 +1,0 @@
-teams:
-  blue_model: "claude-sonnet-4-5-20250929"
-  red_model: "gpt-4.1"
-seed: 42
-operatives_per_team: 3
-
-output_file: "outputs/game_result.json"
-
