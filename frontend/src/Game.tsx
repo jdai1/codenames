@@ -76,12 +76,18 @@ type GivenGuessData = {
 
 type GameEvent = {
   actor: Actor
-  event_type: 'hint_given' | 'guess_made' | 'turn_passed' | 'chat_message'
+  event_type:
+    | 'hint_given'
+    | 'guess_made'
+    | 'turn_passed'
+    | 'chat_message'
+    | 'operative_action'
   hint?: HintEventData // For hint_given events
   guess?: GivenGuessData // For guess_made events
   correct?: boolean // Flattened from guess.correct for guess_made events
-  message?: string // For chat_message events
+  message?: string // For chat_message and operative_action events
   message_metadata?: Record<string, unknown> // For chat_message events
+  tool?: string // For operative_action events (e.g., "talk")
   player_role: string
   team_color: TeamColor
   timestamp: string
@@ -236,6 +242,10 @@ function Game() {
     action: 'hint' | 'guess'
   } | null>(null)
 
+  useEffect(() => {
+    console.log('gameState', gameState)
+  }, [gameState])
+
   // Auto-trigger AI actions when it's an AI's turn
   useEffect(() => {
     if (!gameState || !gameId || gameState.is_game_over) {
@@ -271,15 +281,143 @@ function Game() {
           },
           body: JSON.stringify({ model }),
         })
-          .then((response) => {
+          .then(async (response) => {
+            console.log('AI hint response status:', response.status)
+            console.log('AI hint response headers:', response.headers)
+
             if (!response.ok) {
-              return response.json().then((error) => {
+              const text = await response.text()
+              try {
+                const error = JSON.parse(text)
                 throw new Error(error.error || 'Failed to get AI hint')
-              })
+              } catch (parseError) {
+                console.error('Error parsing error response:', parseError)
+                throw new Error(text || 'Failed to get AI hint')
+              }
             }
-            return response.json()
-          })
-          .then(() => {
+
+            // Handle Server-Sent Events (SSE) stream
+            const reader = response.body?.getReader()
+            const decoder = new TextDecoder()
+            let buffer = ''
+
+            if (!reader) {
+              throw new Error('Response body is not readable')
+            }
+
+            let done = false
+            while (!done) {
+              const result = await reader.read()
+              done = result.done
+
+              if (result.value) {
+                buffer += decoder.decode(result.value, { stream: true })
+                const lines = buffer.split('\n')
+                buffer = lines.pop() || '' // Keep incomplete line in buffer
+
+                for (const line of lines) {
+                  if (line.startsWith('data: ')) {
+                    const jsonStr = line.slice(6) // Remove 'data: ' prefix
+                    try {
+                      const data = JSON.parse(jsonStr)
+                      console.log('AI hint SSE data:', data)
+
+                      // Update game state with each SSE event
+                      // Refetch game state to get latest updates including event history
+                      const operativeResponse = await fetch(
+                        new URL(
+                          `/games/${gameId}?show_colors=false&include_history=true`,
+                          API_URL
+                        ),
+                        {
+                          method: 'GET',
+                        }
+                      )
+                      if (operativeResponse.ok) {
+                        const operativeState = await operativeResponse.json()
+                        queryClient.setQueryData(
+                          ['gameState', gameId],
+                          operativeState
+                        )
+                      }
+
+                      const fullResponse = await fetch(
+                        new URL(
+                          `/games/${gameId}?show_colors=true&include_history=true`,
+                          API_URL
+                        ),
+                        {
+                          method: 'GET',
+                        }
+                      )
+                      if (fullResponse.ok) {
+                        const fullState = await fullResponse.json()
+                        queryClient.setQueryData(
+                          ['gameStateFull', gameId],
+                          fullState
+                        )
+                      }
+                    } catch (parseError) {
+                      console.error(
+                        'Error parsing SSE data:',
+                        parseError,
+                        'Line:',
+                        line
+                      )
+                    }
+                  }
+                }
+              }
+            }
+
+            // Process any remaining buffer
+            if (buffer.trim()) {
+              if (buffer.startsWith('data: ')) {
+                const jsonStr = buffer.slice(6)
+                try {
+                  const data = JSON.parse(jsonStr)
+                  console.log('AI hint SSE final data:', data)
+
+                  // Update game state with final SSE event
+                  const operativeResponse = await fetch(
+                    new URL(
+                      `/games/${gameId}?show_colors=false&include_history=true`,
+                      API_URL
+                    ),
+                    {
+                      method: 'GET',
+                    }
+                  )
+                  if (operativeResponse.ok) {
+                    const operativeState = await operativeResponse.json()
+                    queryClient.setQueryData(
+                      ['gameState', gameId],
+                      operativeState
+                    )
+                  }
+
+                  const fullResponse = await fetch(
+                    new URL(
+                      `/games/${gameId}?show_colors=true&include_history=true`,
+                      API_URL
+                    ),
+                    {
+                      method: 'GET',
+                    }
+                  )
+                  if (fullResponse.ok) {
+                    const fullState = await fullResponse.json()
+                    queryClient.setQueryData(
+                      ['gameStateFull', gameId],
+                      fullState
+                    )
+                  }
+                } catch (parseError) {
+                  console.error('Error parsing final SSE data:', parseError)
+                }
+              }
+            }
+
             // Refetch game state after AI hint
             queryClient.invalidateQueries({ queryKey: ['gameState', gameId] })
             queryClient.invalidateQueries({
@@ -304,16 +442,202 @@ function Game() {
           },
           body: JSON.stringify({ model, n_operatives: nOperatives }),
         })
-          .then((response) => {
+          .then(async (response) => {
+            console.log('AI guess response status:', response.status)
+            console.log('AI guess response headers:', response.headers)
+
             if (!response.ok) {
-              return response.json().then((error) => {
+              const text = await response.text()
+              try {
+                const error = JSON.parse(text)
                 throw new Error(error.error || 'Failed to get AI guess')
-              })
+              } catch (parseError) {
+                console.error('Error parsing error response:', parseError)
+                throw new Error(text || 'Failed to get AI guess')
+              }
             }
-            return response.json()
-          })
-          .then(() => {
-            // Refetch game state after AI guess
+
+            // Handle chunked streaming response
+            const reader = response.body?.getReader()
+            const decoder = new TextDecoder()
+            let buffer = ''
+
+            if (!reader) {
+              throw new Error('Response body is not readable')
+            }
+
+            let done = false
+            while (!done) {
+              const result = await reader.read()
+              done = result.done
+
+              if (result.value) {
+                buffer += decoder.decode(result.value, { stream: true })
+                const lines = buffer.split('\n')
+                buffer = lines.pop() || '' // Keep incomplete line in buffer
+
+                for (const line of lines) {
+                  if (line.trim() === '') continue // Skip empty lines
+
+                  // Handle SSE format: "data: {...}"
+                  if (line.startsWith('data: ')) {
+                    const jsonStr = line.slice(6) // Remove 'data: ' prefix
+                    try {
+                      const data = JSON.parse(jsonStr)
+                      console.log('AI guess SSE data:', data)
+
+                      // Update game state with each chunk/event
+                      // Refetch game state to get latest updates including event history
+                      const operativeResponse = await fetch(
+                        new URL(
+                          `/games/${gameId}?show_colors=false&include_history=true`,
+                          API_URL
+                        ),
+                        {
+                          method: 'GET',
+                        }
+                      )
+                      if (operativeResponse.ok) {
+                        const operativeState = await operativeResponse.json()
+                        queryClient.setQueryData(
+                          ['gameState', gameId],
+                          operativeState
+                        )
+                      }
+
+                      const fullResponse = await fetch(
+                        new URL(
+                          `/games/${gameId}?show_colors=true&include_history=true`,
+                          API_URL
+                        ),
+                        {
+                          method: 'GET',
+                        }
+                      )
+                      if (fullResponse.ok) {
+                        const fullState = await fullResponse.json()
+                        queryClient.setQueryData(
+                          ['gameStateFull', gameId],
+                          fullState
+                        )
+                      }
+
+                      // Check if this is a completion or error event
+                      if (data.type === 'complete' || data.type === 'error') {
+                        done = true
+                        break
+                      }
+                    } catch (parseError) {
+                      console.error(
+                        'Error parsing SSE data:',
+                        parseError,
+                        'Line:',
+                        line
+                      )
+                    }
+                  } else {
+                    // Try parsing as direct JSON (in case it's not SSE format)
+                    try {
+                      const data = JSON.parse(line)
+                      console.log('AI guess chunk data:', data)
+
+                      // Update game state with each chunk
+                      const operativeResponse = await fetch(
+                        new URL(
+                          `/games/${gameId}?show_colors=false&include_history=true`,
+                          API_URL
+                        ),
+                        {
+                          method: 'GET',
+                        }
+                      )
+                      if (operativeResponse.ok) {
+                        const operativeState = await operativeResponse.json()
+                        queryClient.setQueryData(
+                          ['gameState', gameId],
+                          operativeState
+                        )
+                      }
+
+                      const fullResponse = await fetch(
+                        new URL(
+                          `/games/${gameId}?show_colors=true&include_history=true`,
+                          API_URL
+                        ),
+                        {
+                          method: 'GET',
+                        }
+                      )
+                      if (fullResponse.ok) {
+                        const fullState = await fullResponse.json()
+                        queryClient.setQueryData(
+                          ['gameStateFull', gameId],
+                          fullState
+                        )
+                      }
+
+                      if (data.type === 'complete' || data.type === 'error') {
+                        done = true
+                        break
+                      }
+                    } catch (parseError) {
+                      // Not JSON, skip this line
+                      console.log('Skipping non-JSON line:', line)
+                    }
+                  }
+                }
+              }
+            }
+
+            // Process any remaining buffer
+            if (buffer.trim()) {
+              if (buffer.startsWith('data: ')) {
+                const jsonStr = buffer.slice(6)
+                try {
+                  const data = JSON.parse(jsonStr)
+                  console.log('AI guess final SSE data:', data)
+
+                  // Final update
+                  const operativeResponse = await fetch(
+                    new URL(
+                      `/games/${gameId}?show_colors=false&include_history=true`,
+                      API_URL
+                    ),
+                    {
+                      method: 'GET',
+                    }
+                  )
+                  if (operativeResponse.ok) {
+                    const operativeState = await operativeResponse.json()
+                    queryClient.setQueryData(
+                      ['gameState', gameId],
+                      operativeState
+                    )
+                  }
+
+                  const fullResponse = await fetch(
+                    new URL(
+                      `/games/${gameId}?show_colors=true&include_history=true`,
+                      API_URL
+                    ),
+                    {
+                      method: 'GET',
+                    }
+                  )
+                  if (fullResponse.ok) {
+                    const fullState = await fullResponse.json()
+                    queryClient.setQueryData(
+                      ['gameStateFull', gameId],
+                      fullState
+                    )
+                  }
+                } catch (parseError) {
+                  console.error('Error parsing final SSE data:', parseError)
+                }
+              }
+            }
+
+            // Final refetch to ensure everything is up to date
             queryClient.invalidateQueries({ queryKey: ['gameState', gameId] })
             queryClient.invalidateQueries({
               queryKey: ['gameStateFull', gameId],
@@ -836,6 +1160,19 @@ function ChatHistory({
                 <div
                   key={`event-${idx}`}
                   className='p-2 rounded bg-blue-50 text-sm italic'
+                >
+                  {event.actor.name}: {event.message}
+                </div>
+              )
+            } else if (
+              event.event_type === 'operative_action' &&
+              event.tool === 'talk' &&
+              event.message
+            ) {
+              return (
+                <div
+                  key={`event-${idx}`}
+                  className='p-2 rounded bg-purple-50 text-sm italic'
                 >
                   {event.actor.name}: {event.message}
                 </div>
