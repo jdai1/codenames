@@ -197,7 +197,7 @@ def ai_give_hint(game_id: str):
         )
 
         # Use the high-level spymaster_turn function from run_agents.py
-        success, result_info = spymaster_turn(game, spymaster, message_history)
+        success, result_info, _, _, combined_message = spymaster_turn(game, spymaster, message_history)
 
         if not success:
             return jsonify({"error": result_info.get("reason", "Hint failed")}), 400
@@ -206,6 +206,7 @@ def ai_give_hint(game_id: str):
         return jsonify(
             {
                 "success": True,
+                "combined_message": combined_message,
                 "hint": {
                     "word": result_info["clue"],
                     "card_amount": result_info["quantity"],
