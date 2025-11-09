@@ -1480,15 +1480,35 @@ function ChatHistory({
             }
             return null
           })}
-        {(!gameState.event_history ||
-          (team === 'RED'
-            ? gameState.event_history.red_team.length === 0
-            : gameState.event_history.blue_team.length === 0)) &&
-          !(aiLoading && aiLoading.team === team) && (
+        {(() => {
+          const noTeamActivity =
+            !gameState.event_history ||
+            (team === 'RED'
+              ? gameState.event_history.red_team.length === 0
+              : gameState.event_history.blue_team.length === 0)
+          const aiActiveForThisTeam = !!(aiLoading && aiLoading.team === team)
+          if (!noTeamActivity || aiActiveForThisTeam) return null
+          // If it's currently an AI turn but activity hasn't appeared yet, show an immediate loading placeholder
+          if (isSpymasterTurn && !isHumanSpymaster) {
+            return (
+              <div className='px-3 py-2 rounded-lg bg-gradient-to-br from-gray-50 to-gray-100/50 border border-gray-200/50 text-sm italic text-gray-600 shadow-sm animate-pulse'>
+                💭 AI is thinking of a hint...
+              </div>
+            )
+          }
+          if (isGuesserTurn && !isHumanGuesser) {
+            return (
+              <div className='px-3 py-2 rounded-lg bg-gradient-to-br from-gray-50 to-gray-100/50 border border-gray-200/50 text-sm italic text-gray-600 shadow-sm animate-pulse'>
+                🤔 AI is making guesses...
+              </div>
+            )
+          }
+          return (
             <div className='text-gray-400 text-sm text-center py-8'>
               No activity yet
             </div>
-          )}
+          )
+        })()}
 
         {aiLoading && aiLoading.team === team && (
           <div className='px-3 py-2 rounded-lg bg-gradient-to-br from-gray-50 to-gray-100/50 border border-gray-200/50 text-sm italic text-gray-600 shadow-sm animate-pulse'>
