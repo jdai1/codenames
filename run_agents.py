@@ -124,7 +124,7 @@ def spymaster_turn(
     game: CodenamesGame,
     spymaster: Agent,
     message_history: List[Dict[str, str]],
-) -> Tuple[bool, Dict[str, Any]]:
+) -> Tuple[bool, Dict[str, Any], float, int]:
     """Handle a single spymaster turn. Returns (success, result_dict)."""
     # Build spymaster view
     state = game.get_state(show_colors=True)
@@ -142,7 +142,7 @@ def spymaster_turn(
     )
 
     inc_llm_calls(step=f"{spymaster.name}.run")
-    result, assistant_msg, _, _ = spymaster.run(
+    result, assistant_msg, model_cost, token_usage = spymaster.run(
         user_message=user_msg, message_history=message_history
     )
     private_reasoning = (
@@ -178,7 +178,7 @@ def spymaster_turn(
             "clue": clue,
             "quantity": qty,
         }
-    return True, {"clue": clue, "quantity": qty}
+    return True, {"clue": clue, "quantity": qty}, model_cost, token_usage
 
 
 def collect_majority_vote(votes: List[str], quorum: int) -> str | None:
@@ -196,15 +196,17 @@ def guesser_turn(
     ops: List[Agent],
     message_history: List[Dict[str, str]],
     max_rounds: int = 25,
-) -> None:
+) -> Tuple[float, int]:
     """Coordinate operative discussion and majority voting for guesses until turn ends or pass."""
     team_turn = game.get_current_turn().team
+    total_model_cost = 0
+    total_token_usage = 0
     while True:
         # Refresh state for display and constraints
         board_str = format_board_for_operatives(game)
         last_hint = game.get_last_hint()
         if last_hint is None:
-            return
+            return total_model_cost, total_token_usage
 
         votes_by_agent: Dict[str, str] = {}
 
@@ -231,9 +233,11 @@ def guesser_turn(
                 )
 
                 inc_llm_calls(step=f"{agent.name}.run")
-                result, assistant_msg, _, _ = agent.run(
+                result, assistant_msg, model_cost, token_usage = agent.run(
                     user_message=user_msg, message_history=message_history
                 )
+                total_model_cost += model_cost
+                total_token_usage += token_usage
                 if result.get("type") == "talk":
                     talk_msg = result.get("message", "")
                     message_history.append(
@@ -316,7 +320,7 @@ def guesser_turn(
                             )
                             print("Vote result: PASS -> turn passed")
                         votes_by_agent.clear()
-                        return
+                        return total_model_cost, total_token_usage
                     else:
                         guess_word = majority
                         vote_summary = formatted_votes()
@@ -330,7 +334,7 @@ def guesser_turn(
                                 }
                             )
                             print(f"Vote result: {guess_word.upper()} -> failed ({e})")
-                            return
+                            return total_model_cost, total_token_usage
 
                         # Log outcome
                         correctness = "correct" if guess_res.correct else "wrong"
@@ -353,7 +357,7 @@ def guesser_turn(
 
                         # If game ended or turn switched (wrong or out of guesses), break out
                         if guess_res.is_game_over:
-                            return
+                            return total_model_cost, total_token_usage
 
                         # After a correct guess, if still this team's guess turn continues automatically
                         ct = game.get_current_turn()
@@ -361,7 +365,7 @@ def guesser_turn(
                             _name(ct.team) != _name(team_turn)
                             or _name(ct.role) != "GUESSER"
                         ):
-                            return
+                            return total_model_cost, total_token_usage
 
                         # Continue to next guess in same turn
                         votes_by_agent.clear()
@@ -378,7 +382,7 @@ def guesser_turn(
             print(f"Vote result: PASS -> failed ({e})")
         else:
             print("Vote result: NO CONSENSUS -> PASS")
-        return
+        return total_model_cost, total_token_usage
 
 
 def main():
@@ -403,6 +407,8 @@ def main():
 
     # Main game loop
     print(f"Starting Codenames game: {game}")
+    final_model_cost = 0
+    final_token_usage = 0
     while not game.is_game_over():
         state = game.get_state(show_colors=False)
         turn = state.current_turn
@@ -415,7 +421,11 @@ def main():
             print(f"\n=== ROUND {round_number}: TEAM {team_label} ===")
             print("Board (uncensored):")
             print(format_board_for_spymaster(game))
-            ok, info = spymaster_turn(game, spy, spymaster_histories[team_key])
+            ok, info, model_cost, token_usage = spymaster_turn(
+                game, spy, spymaster_histories[team_key]
+            )
+            final_model_cost += model_cost
+            final_token_usage += token_usage
             if not ok:
                 print(f"Spymaster error for {team_key}: {info}")
                 # If spymaster fails, try to pass turn to avoid deadlock
@@ -431,7 +441,11 @@ def main():
         else:
             ops = blue_ops if team_key == "BLUE" else red_ops
             history_before = len(operative_histories[team_key])
-            guesser_turn(game, ops, operative_histories[team_key])
+            model_cost, token_usage = guesser_turn(
+                game, ops, operative_histories[team_key]
+            )
+            final_model_cost += model_cost
+            final_token_usage += token_usage
             round_messages = operative_histories[team_key][history_before:]
             summary = summarize_round_messages(round_messages, model=model)
             if summary:
@@ -456,7 +470,26 @@ def main():
     print("Game over!")
     if final.winner:
         print(f"Winner: {_name(final.winner.team_color)}")
-    print(json.dumps(final.dict(), indent=2, default=str))
+    print(f"Total model cost: {final_model_cost}")
+    print(f"Total token usage: {final_token_usage}")
+    # Include event history so we can compute guess counts by team
+    final = game.get_state(show_colors=True, include_history=True)
+    final_dict = final.dict()
+    # Compute guesses made by each team from event history
+    event_history = final_dict.get("event_history") or {}
+
+    def _count_team_guesses(team_events: List[Dict[str, Any]]) -> int:
+        return sum(1 for e in team_events if e.get("event_type") == "guess_made")
+
+    guesses_blue = _count_team_guesses(event_history.get("blue_team", []))
+    guesses_red = _count_team_guesses(event_history.get("red_team", []))
+    # Attach lightweight metrics
+    final_dict["metrics"] = {
+        "guesses_made": {"BLUE": guesses_blue, "RED": guesses_red},
+        "total_model_cost": final_model_cost,
+        "total_token_usage": final_token_usage,
+    }
+    print(json.dumps(final_dict, indent=2, default=str))
 
 
 if __name__ == "__main__":
