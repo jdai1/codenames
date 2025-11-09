@@ -42,6 +42,15 @@ class EventType(str, Enum):
     GUESS_MADE = "guess_made"
     TURN_PASSED = "turn_passed"
     CHAT_MESSAGE = "chat_message"
+    OPERATIVE_ACTION = "operative_action"
+    SPYMASTER_ACTION = "spymaster_action"
+
+
+class OperativeToolType(str, Enum):
+    """Types of tools an operative can use."""
+    VOTE_GUESS = "vote_guess"
+    VOTE_PASS = "vote_pass"
+    TALK = "talk"
 
 
 class GameEvent(BaseModel):
@@ -108,34 +117,63 @@ class ChatEvent(GameEvent):
         return f"[{self.team_color.value}] {actor_str} ({self.player_role.value}): {self.message}"
 
 
+class OperativeEvent(GameEvent):
+    """Event for operative tool usage (for LLM interpretability)."""
+    event_type: EventType = EventType.OPERATIVE_ACTION
+    tool: OperativeToolType
+    message: Optional[str] = None  # Word for vote_guess, reason for vote_pass, discussion for talk
+
+    def __str__(self) -> str:
+        actor_str = str(self.actor) if isinstance(self.actor, LLMActor) else self.actor.name
+        if self.tool == OperativeToolType.TALK:
+            return f"[{self.team_color.value}] {actor_str} talks: {self.message}"
+        elif self.tool == OperativeToolType.VOTE_GUESS:
+            return f"[{self.team_color.value}] {actor_str} votes to guess: {self.message}"
+        elif self.tool == OperativeToolType.VOTE_PASS:
+            return f"[{self.team_color.value}] {actor_str} votes to pass"
+        return f"[{self.team_color.value}] {actor_str} operative action: {self.tool.value}"
+
+
+class SpymasterEvent(GameEvent):
+    """Event for spymaster reasoning (for LLM interpretability)."""
+    event_type: EventType = EventType.SPYMASTER_ACTION
+    reasoning: Optional[str] = None
+
+    def __str__(self) -> str:
+        actor_str = str(self.actor) if isinstance(self.actor, LLMActor) else self.actor.name
+        if self.reasoning:
+            return f"[{self.team_color.value}] {actor_str} reasons: {self.reasoning}"
+        return f"[{self.team_color.value}] {actor_str} spymaster action"
+
+
 class TeamHistory(BaseModel):
     """Tracks all events for a specific team."""
     team_color: TeamColor
-    hints_given: List[HintEvent] = []
-    guesses_made: List[GuessEvent] = []
-    chat_messages: List[ChatEvent] = []
-    passes: List[PassEvent] = []
     all_events: List[GameEvent] = []
 
     def add_hint(self, hint_event: HintEvent) -> None:
         """Add a hint event to team history."""
-        self.hints_given.append(hint_event)
         self.all_events.append(hint_event)
 
     def add_guess(self, guess_event: GuessEvent) -> None:
         """Add a guess event to team history."""
-        self.guesses_made.append(guess_event)
         self.all_events.append(guess_event)
 
     def add_chat(self, chat_event: ChatEvent) -> None:
         """Add a chat message to team history."""
-        self.chat_messages.append(chat_event)
         self.all_events.append(chat_event)
 
     def add_pass(self, pass_event: PassEvent) -> None:
         """Add a pass event to team history."""
-        self.passes.append(pass_event)
         self.all_events.append(pass_event)
+
+    def add_operative_action(self, operative_event: OperativeEvent) -> None:
+        """Add an operative action event to team history."""
+        self.all_events.append(operative_event)
+
+    def add_spymaster_action(self, spymaster_event: SpymasterEvent) -> None:
+        """Add a spymaster action event to team history."""
+        self.all_events.append(spymaster_event)
 
     def get_recent_events(self, count: int = 10) -> List[GameEvent]:
         """Get the most recent N events."""
@@ -143,7 +181,7 @@ class TeamHistory(BaseModel):
 
     def get_chat_history(self) -> List[ChatEvent]:
         """Get all chat messages in chronological order."""
-        return self.chat_messages
+        return [e for e in self.all_events if isinstance(e, ChatEvent)]
 
 
 class GameHistory(BaseModel):
@@ -175,6 +213,10 @@ class GameHistory(BaseModel):
             team_history.add_chat(event)
         elif isinstance(event, PassEvent):
             team_history.add_pass(event)
+        elif isinstance(event, OperativeEvent):
+            team_history.add_operative_action(event)
+        elif isinstance(event, SpymasterEvent):
+            team_history.add_spymaster_action(event)
         else:
             team_history.all_events.append(event)
 

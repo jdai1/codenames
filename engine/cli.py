@@ -39,10 +39,7 @@ def print_event_history(game):
         print("  No events recorded")
 
     print(f"\nSummary:")
-    print(f"  Hints given: {len(blue_history.hints_given)}")
-    print(f"  Guesses made: {len(blue_history.guesses_made)}")
-    print(f"  Chat messages: {len(blue_history.chat_messages)}")
-    print(f"  Passes: {len(blue_history.passes)}")
+    print(f"  Total events: {len(blue_history.all_events)}")
 
     # Print Red Team History
     print("\n🟥 RED TEAM HISTORY:")
@@ -56,10 +53,7 @@ def print_event_history(game):
         print("  No events recorded")
 
     print(f"\nSummary:")
-    print(f"  Hints given: {len(red_history.hints_given)}")
-    print(f"  Guesses made: {len(red_history.guesses_made)}")
-    print(f"  Chat messages: {len(red_history.chat_messages)}")
-    print(f"  Passes: {len(red_history.passes)}")
+    print(f"  Total events: {len(red_history.all_events)}")
 
     # Print Global Timeline
     print("\n🌍 GLOBAL TIMELINE:")
