@@ -186,21 +186,9 @@ class CodenamesGame:
         event_history = None
         if include_history:
             event_history = {
-                "blue_team": {
-                    "hints": [str(e) for e in self.state.history.blue_team.hints_given],
-                    "guesses": [str(e) for e in self.state.history.blue_team.guesses_made],
-                    "chats": [str(e) for e in self.state.history.blue_team.chat_messages],
-                    "passes": [str(e) for e in self.state.history.blue_team.passes],
-                    "all_events": [str(e) for e in self.state.history.blue_team.all_events],
-                },
-                "red_team": {
-                    "hints": [str(e) for e in self.state.history.red_team.hints_given],
-                    "guesses": [str(e) for e in self.state.history.red_team.guesses_made],
-                    "chats": [str(e) for e in self.state.history.red_team.chat_messages],
-                    "passes": [str(e) for e in self.state.history.red_team.passes],
-                    "all_events": [str(e) for e in self.state.history.red_team.all_events],
-                },
-                "global_events": [str(e) for e in self.state.history.global_events],
+                "blue_team": [e.dict() for e in self.state.history.blue_team.all_events],
+                "red_team": [e.dict() for e in self.state.history.red_team.all_events],
+                "global_events": [e.dict() for e in self.state.history.global_events],
             }
 
         return GameStateResponse(

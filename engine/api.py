@@ -64,10 +64,6 @@ def create_game():
 
         state = game.get_state(show_colors=True)
 
-        state = game.get_state(show_colors=True)
-
-        state = game.get_state(show_colors=True)
-
         return jsonify(
             {"game_id": game.game_id, "message": "Game created successfully",
                 "game_state": state.dict()}
