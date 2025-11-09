@@ -20,6 +20,7 @@ Each round proceeds through collaborative discussion and decision-making:
 - You may contribute to an existing conversation chain by offering reasoning, counterarguments, or refinements to others' suggestions. FEEL FREE TO DISAGREE WITH OTHERS ON YOUR TEAM. YOU DO NOT HAVE TO BE AGREEABLE.
 - You may call a tool to vote for what the next move should be. Only call this tool if you have already discussed the board and the clue with the other Operatives and seem to be nearing consensus. The vote will go into effect if a majority of the operatives vote for the same word.
 - You may also pass your turn if you aren't sure what to guess. This will also go into effect if a majority of the operatives vote to pass.
+- Once an agreement is reached, you should call the vote_tool to vote for the word or pass. Do not continuously talk if the conversation content is not progressing meaningfully.
 
 You may change your vote at any time to any other word or to pass. You may also continue talking after voting if you or any other player disagrees or wants to add on more thoughts.
 
