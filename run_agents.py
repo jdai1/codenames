@@ -286,6 +286,7 @@ def guesser_turn(
     ops: List[Agent],
     message_history: List[Dict[str, str]],
     max_rounds: int = 25,
+    per_agent_histories: Dict[str, List[Dict[str, str]]] | None = None,
 ):
     """Coordinate operative discussion and majority voting for guesses until turn ends or pass.
 
@@ -294,6 +295,28 @@ def guesser_turn(
     total_model_cost = 0
     total_token_usage = 0
     team_turn = game.get_current_turn().team
+
+    # Ensure per-agent histories are initialized for all agents if provided
+    if per_agent_histories is not None:
+        for agent in ops:
+            if agent.name not in per_agent_histories:
+                per_agent_histories[agent.name] = []
+
+    def _broadcast_user_message_to_personals(content: str) -> None:
+        if per_agent_histories is None:
+            return
+        entry = {"role": "user", "content": content}
+        for agent in ops:
+            per_agent_histories[agent.name].append(entry.copy())
+
+    def _record_agent_assistant_in_personals(agent_name: str, content: str) -> None:
+        if per_agent_histories is None:
+            return
+        # This agent sees their own content as assistant, others as user
+        for agent in ops:
+            role = "assistant" if agent.name == agent_name else "user"
+            per_agent_histories[agent.name].append({"role": role, "content": content})
+
     while True:
         # Refresh state for display and constraints
         board_str = format_board_for_operatives(game)
@@ -332,8 +355,14 @@ def guesser_turn(
                 )
 
                 inc_llm_calls(step=f"{agent.name}.run")
+                # Choose the appropriate message history for this agent
+                history_for_agent = (
+                    per_agent_histories[agent.name]
+                    if per_agent_histories is not None
+                    else message_history
+                )
                 result, assistant_msg, model_cost, token_usage = agent.run(
-                    user_message=user_msg, message_history=message_history
+                    user_message=user_msg, message_history=history_for_agent
                 )
                 total_model_cost += model_cost
                 total_token_usage += token_usage
@@ -355,6 +384,10 @@ def guesser_turn(
 
                     message_history.append(
                         {"role": "assistant", "content": f"{agent.name}: {talk_msg}"}
+                    )
+                    # Update personal histories: assistant for speaker, user for others
+                    _record_agent_assistant_in_personals(
+                        agent.name, f"{agent.name}: {talk_msg}"
                     )
                     print(f"{agent.name.upper()}: {talk_msg}")
 
@@ -378,6 +411,9 @@ def guesser_turn(
                             print(
                                 f"{agent.name.upper()} attempted invalid vote {word.upper()} (not on board)"
                             )
+                            _broadcast_user_message_to_personals(
+                                f"system: vote rejected for {word.upper()}: word not on the board."
+                            )
                             continue
                         card = game.state.board.cards[card_index]
                         if card.revealed:
@@ -393,6 +429,9 @@ def guesser_turn(
                             print(
                                 f"{agent.name.upper()} attempted invalid vote {word.upper()} (already revealed)"
                             )
+                            _broadcast_user_message_to_personals(
+                                f"system: vote rejected for {word.upper()}: card already revealed."
+                            )
                             continue
                         # Add operative event for interpretability
                         operative_event = OperativeEvent(
@@ -403,6 +442,11 @@ def guesser_turn(
                             message=word,
                         )
                         game.state.history.add_event(operative_event)
+
+                        # Update personal histories to reflect this agent's action
+                        _record_agent_assistant_in_personals(
+                            agent.name, f"{agent.name}: VOTE {word}"
+                        )
 
                         previous_vote = votes_by_agent.get(agent.name)
                         votes_by_agent[agent.name] = word
@@ -437,6 +481,11 @@ def guesser_turn(
                         message=None,
                     )
                     game.state.history.add_event(operative_event)
+
+                    # Update personal histories to reflect this agent's action
+                    _record_agent_assistant_in_personals(
+                        agent.name, f"{agent.name}: PASS"
+                    )
 
                     # Treat 'pass' as a vote option; require majority like word guesses
                     previous_vote = votes_by_agent.get(agent.name)
@@ -484,12 +533,18 @@ def guesser_turn(
                                 }
                             )
                             print(f"Vote result: PASS -> failed ({e})")
+                            _broadcast_user_message_to_personals(
+                                f"system: pass failed: {e}"
+                            )
                         else:
                             message_history.append(
                                 {
                                     "role": "user",
                                     "content": f"system: team decided to PASS; votes={vote_summary}",
                                 }
+                            )
+                            _broadcast_user_message_to_personals(
+                                f"system: team decided to PASS; votes={vote_summary}"
                             )
                             print("Vote result: PASS -> turn passed")
                         votes_by_agent.clear()
@@ -508,6 +563,9 @@ def guesser_turn(
                                 }
                             )
                             print(f"Vote result: {guess_word.upper()} -> failed ({e})")
+                            _broadcast_user_message_to_personals(
+                                f"system: guess '{guess_word}' failed: {e}"
+                            )
                             yield total_model_cost, total_token_usage
                             return
 
@@ -519,6 +577,9 @@ def guesser_turn(
                                 "content": f"system: guessed {guess_word.upper()} -> {correctness}; left_guesses={guess_res.left_guesses}",
                             }
                         )
+                        _broadcast_user_message_to_personals(
+                            f"system: guessed {guess_word.upper()} -> {correctness}; left_guesses={guess_res.left_guesses}"
+                        )
                         print(
                             f"Vote result: {guess_word.upper()} -> {correctness.upper()}"
                         )
@@ -528,6 +589,9 @@ def guesser_turn(
                                     "role": "user",
                                     "content": f"system: vote summary -> {vote_summary}",
                                 }
+                            )
+                            _broadcast_user_message_to_personals(
+                                f"system: vote summary -> {vote_summary}"
                             )
 
                         # If game ended or turn switched (wrong or out of guesses), break out
@@ -556,6 +620,7 @@ def guesser_turn(
             message_history.append(
                 {"role": "user", "content": f"system: pass failed: {e}"}
             )
+            _broadcast_user_message_to_personals(f"system: pass failed: {e}")
             print(f"Vote result: PASS -> failed ({e})")
         else:
             print("Vote result: NO CONSENSUS -> PASS")
@@ -580,6 +645,10 @@ def main():
     # Use normalized team name ("BLUE"/"RED") as keys to avoid enum/string mismatches
     operative_histories: Dict[str, List[Dict[str, str]]] = defaultdict(list)
     spymaster_histories: Dict[str, List[Dict[str, str]]] = defaultdict(list)
+    # Personal histories per operative (per team)
+    operative_personal_histories: Dict[str, Dict[str, List[Dict[str, str]]]] = (
+        defaultdict(dict)
+    )
 
     round_number = 1
 
@@ -599,7 +668,7 @@ def main():
             print(f"\n=== ROUND {round_number}: TEAM {team_label} ===")
             print("Board (uncensored):")
             print(format_board_for_spymaster(game))
-            ok, info, model_cost, token_usage = spymaster_turn(
+            ok, info, model_cost, token_usage, _ = spymaster_turn(
                 game, spy, spymaster_histories[team_key]
             )
             final_model_cost += model_cost
@@ -619,8 +688,14 @@ def main():
         else:
             ops = blue_ops if team_key == "BLUE" else red_ops
             history_before = len(operative_histories[team_key])
-            # Consume the generator to execute the turn
-            for item in guesser_turn(game, ops, operative_histories[team_key]):
+            # Consume the generator to execute the turn (with per-agent histories)
+            team_personals = operative_personal_histories[team_key]
+            for item in guesser_turn(
+                game,
+                ops,
+                operative_histories[team_key],
+                per_agent_histories=team_personals,
+            ):
                 # check type
                 if isinstance(item, tuple):
                     model_cost, token_usage = item
@@ -637,7 +712,7 @@ def main():
                     }
                 )
 
-        # breakpoint()
+        breakpoint()
 
         # Print a light summary of board progress
         s = game.get_state(show_colors=False)
