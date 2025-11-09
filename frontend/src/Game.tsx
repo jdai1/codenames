@@ -124,6 +124,7 @@ function Game() {
   const [blueOperators, setBlueOperators] = useState<number>(1)
   const [gameId, setGameId] = useState<string | null>(null)
   const [spymasterView, setSpymasterView] = useState(false)
+  const [useNeoWords, setUseNeoWords] = useState(false)
 
   const queryClient = useQueryClient()
 
@@ -186,7 +187,7 @@ function Game() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ neo_words: useNeoWords }),
       })
       if (!response.ok) {
         throw new Error('Failed to create game')
@@ -940,28 +941,49 @@ function Game() {
             )}
           </div>
 
-          <button
-            className={`rounded px-4 py-1.5 text-md transition-colors ${
-              gameId
-                ? 'bg-gray-300 hover:bg-gray-400 text-black font-normal'
-                : 'bg-amber-400 hover:bg-amber-500 font-medium'
-            }`}
-            onClick={() => {
-              if (gameId) {
-                setGameId(null)
-              } else {
-                unlockAudio()
-                createNewGame.mutate()
-              }
-            }}
-            disabled={createNewGame.isPending}
-          >
-            {createNewGame.isPending
-              ? 'Creating...'
-              : gameId
-              ? 'Cancel'
-              : 'Start'}
-          </button>
+          <div className='flex flex-row gap-1'>
+            <div className='flex items-center gap-2'>
+              <input
+                type='checkbox'
+                id='neo-words-checkbox'
+                checked={useNeoWords}
+                onChange={(e) => setUseNeoWords(e.target.checked)}
+                disabled={!!gameId}
+                className='w-4 h-4 cursor-pointer disabled:cursor-not-allowed'
+              />
+              <label
+                htmlFor='neo-words-checkbox'
+                className={`text-sm cursor-pointer ${
+                  gameId ? 'text-gray-400' : 'text-gray-700'
+                }`}
+              >
+                Use Neo Words
+              </label>
+            </div>
+
+            <button
+              className={`rounded px-4 py-1.5 text-md transition-colors ${
+                gameId
+                  ? 'bg-gray-300 hover:bg-gray-400 text-black font-normal'
+                  : 'bg-amber-400 hover:bg-amber-500 font-medium'
+              }`}
+              onClick={() => {
+                if (gameId) {
+                  setGameId(null)
+                } else {
+                  unlockAudio()
+                  createNewGame.mutate()
+                }
+              }}
+              disabled={createNewGame.isPending}
+            >
+              {createNewGame.isPending
+                ? 'Creating...'
+                : gameId
+                ? 'Cancel'
+                : 'Start'}
+            </button>
+          </div>
 
           <div className='flex items-center gap-3'>
             <span className='text-blue-600 font-semibold text-lg'>Blue</span>
@@ -1073,59 +1095,66 @@ function Game() {
       )}
 
       {gameState && gameId && (
-        <div className='grid grid-cols-5 h-[calc(100vh-100px)] grow'>
-          <div className='col-span-1 f overflow-scroll'>
-            <ChatHistory
-              team='RED'
-              gameState={gameState}
-              gameType={gameType.red}
-              gameId={gameId!}
-              onHintSubmitted={() => setSpymasterView(false)}
-              aiLoading={aiLoading}
-            />
-          </div>
-          <div className='col-span-3 bg-white p-4 overflow-scroll'>
-            <div className='grid gap-2 grid-cols-5 grid-rows-5 h-full'>
-              {gameState.board.map((card) => {
-                const isGuesserTurn = gameState.current_turn.role === 'GUESSER'
-                const currentTeam = gameState.current_turn.team
-                const isHumanGuesser =
-                  (currentTeam === 'RED'
-                    ? gameType.red.guesser
-                    : gameType.blue.guesser) === 'HUMAN'
-                const canClick =
-                  !spymasterView &&
-                  !card.revealed &&
-                  isGuesserTurn &&
-                  isHumanGuesser
+        <>
+          <div className='grid grid-cols-5 h-[calc(100vh-100px-32px)] grow'>
+            <div className='col-span-1 f overflow-scroll'>
+              <ChatHistory
+                team='RED'
+                gameState={gameState}
+                gameType={gameType.red}
+                gameId={gameId!}
+                onHintSubmitted={() => setSpymasterView(false)}
+                aiLoading={aiLoading}
+              />
+            </div>
+            <div className='col-span-3 bg-white p-4 overflow-scroll'>
+              <div className='grid gap-2 grid-cols-5 grid-rows-5 h-full'>
+                {gameState.board.map((card) => {
+                  const isGuesserTurn =
+                    gameState.current_turn.role === 'GUESSER'
+                  const currentTeam = gameState.current_turn.team
+                  const isHumanGuesser =
+                    (currentTeam === 'RED'
+                      ? gameType.red.guesser
+                      : gameType.blue.guesser) === 'HUMAN'
+                  const canClick =
+                    !spymasterView &&
+                    !card.revealed &&
+                    isGuesserTurn &&
+                    isHumanGuesser
 
-                return (
-                  <Card
-                    label={card.word}
-                    type={getCardType(card)}
-                    key={card.index}
-                    onClick={
-                      canClick ? () => handleCardGuess(card.word) : undefined
-                    }
-                    clickable={canClick}
-                    revealed={card.revealed}
-                    spymasterView={spymasterView}
-                  />
-                )
-              })}
+                  return (
+                    <Card
+                      label={card.word}
+                      type={getCardType(card)}
+                      key={card.index}
+                      onClick={
+                        canClick ? () => handleCardGuess(card.word) : undefined
+                      }
+                      clickable={canClick}
+                      revealed={card.revealed}
+                      spymasterView={spymasterView}
+                    />
+                  )
+                })}
+              </div>
+            </div>
+            <div className='col-span-1 bg-white overflow-scroll'>
+              <ChatHistory
+                team='BLUE'
+                gameState={gameState}
+                gameType={gameType.blue}
+                aiLoading={aiLoading}
+                gameId={gameId!}
+                onHintSubmitted={() => setSpymasterView(false)}
+              />
             </div>
           </div>
-          <div className='col-span-1 bg-white overflow-scroll'>
-            <ChatHistory
-              team='BLUE'
-              gameState={gameState}
-              gameType={gameType.blue}
-              aiLoading={aiLoading}
-              gameId={gameId!}
-              onHintSubmitted={() => setSpymasterView(false)}
-            />
-          </div>
-        </div>
+
+          <p className='text-center text-gray-500 text-sm h-[32px]'>
+            Press Cmd+K to toggle spymaster view
+          </p>
+        </>
       )}
 
       {(!gameState && !isLoading) ||
@@ -1767,7 +1796,7 @@ function Card({
   return (
     <div
       className={`${baseClasses} ${clickableClasses} ${disabledClasses} ${opacityClasses} p-4 flex flex-col justify-between items-stretch card-label gap-4 ${
-        label.length > 10 ? 'text-[1.5vw]' : 'text-[1.75vw]'
+        label.length > 10 ? 'text-[1.25vw]' : 'text-[1.5vw]'
       } border-8`}
       onClick={clickable && !revealed && onClick ? onClick : undefined}
     >
@@ -1805,7 +1834,7 @@ function Card({
           </span>
         )}
       </div>
-      <div className='py-2 px-4 bg-white text-black min-h-16 flex items-center justify-center'>
+      <div className='py-1 px-2 bg-white text-black min-h-16 flex items-center justify-center'>
         {label}
         {/* {revealed ? ' ✓' : ''} */}
       </div>

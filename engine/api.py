@@ -30,7 +30,8 @@ games: Dict[str, CodenamesGame] = {}
 def health_check():
     """Health check endpoint."""
     return jsonify(
-        {"name": "Codenames API", "version": "1.0.0", "active_games": len(games)}
+        {"name": "Codenames API", "version": "1.0.0",
+            "active_games": len(games)}
     )
 
 
@@ -43,7 +44,8 @@ def create_game():
         {
             "language": "english",
             "board_size": 25,
-            "seed": null
+            "seed": null,
+            "neo_words": false
         }
     """
 
@@ -54,9 +56,11 @@ def create_game():
     seed = data.get("seed")
     if seed is None:
         seed = random.randint(0, 1_000_000_000)
+    neo_words = data.get("neo_words", False)
 
     try:
-        game = CodenamesGame(language=language, board_size=board_size, seed=seed)
+        game = CodenamesGame(
+            language=language, board_size=board_size, seed=seed, neo_words=neo_words)
         games[game.game_id] = game
 
         state = game.get_state(show_colors=True)
@@ -197,7 +201,8 @@ def ai_give_hint(game_id: str):
         )
 
         # Use the high-level spymaster_turn function from run_agents.py
-        success, result_info, _, _, combined_message = spymaster_turn(game, spymaster, message_history)
+        success, result_info, _, _, combined_message = spymaster_turn(
+            game, spymaster, message_history)
 
         if not success:
             return jsonify({"error": result_info.get("reason", "Hint failed")}), 400
@@ -296,7 +301,7 @@ def ai_make_guess(game_id: str):
 
         except ValueError as e:
             yield "data: " + json.dumps({"type": "error", "error": str(e)}) + "\n\n"
-        except Exception as e:  
+        except Exception as e:
             yield "data: " + json.dumps({"type": "error", "error": f"Internal error: {str(e)}"}) + "\n\n"
 
     return Response(

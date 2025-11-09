@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Optional, Union
 
-from engine.boards.english import ENGLISH_WORDS
+from engine.boards.english import ENGLISH_WORDS, NEO_WORDS
 from engine.game.board import Board
 from engine.game.color import TeamColor
 
@@ -17,9 +17,10 @@ def generate_board(
     black_amount: int = 1,
     seed: Optional[int] = None,
     first_team: Optional[TeamColor] = None,
+    neo_words: bool = False,
 ) -> Board:
     if language == SupportedLanguage.ENGLISH:
-        words = ENGLISH_WORDS
+        words = NEO_WORDS if neo_words else ENGLISH_WORDS
     else:
         raise NotImplementedError(f"Unknown language: {language}")
     return Board.from_vocabulary(

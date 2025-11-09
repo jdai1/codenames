@@ -41,11 +41,13 @@ def sanitize_word(word: str) -> str:
 
     # Check if word only contains letters and spaces
     if not re.match(r'^[a-zA-Z\s]+$', word):
-        raise ValueError(f"Word must only contain English letters and spaces: '{word}'")
+        raise ValueError(
+            f"Word must only contain English letters and spaces: '{word}'")
 
     # Convert to lowercase and normalize spaces
     word = word.lower()
-    word = re.sub(r'\s+', ' ', word)  # Replace multiple spaces with single space
+    # Replace multiple spaces with single space
+    word = re.sub(r'\s+', ' ', word)
 
     return word
 
@@ -55,7 +57,7 @@ def sanitize_word(word: str) -> str:
 class CodenamesGame:
     """Main API interface for a Codenames game."""
 
-    def __init__(self, language: str = "english", board_size: int = 25, seed: Optional[int] = None):
+    def __init__(self, language: str = "english", board_size: int = 25, seed: Optional[int] = None, neo_words: bool = False):
         """
         Create a new Codenames game.
 
@@ -63,12 +65,14 @@ class CodenamesGame:
             language: Board language ("english" or "hebrew")
             board_size: Number of cards (default 25)
             seed: Random seed for reproducibility
+            neo_words: If True, use NEO_WORDS instead of default ENGLISH_WORDS
         """
         self.game_id = str(uuid4())
         board = generate_board(
             language=SupportedLanguage.ENGLISH,
             board_size=board_size,
-            seed=seed
+            seed=seed,
+            neo_words=neo_words
         )
         self.state = new_game_state(board=board)
 
