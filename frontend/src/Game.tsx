@@ -235,17 +235,11 @@ function Game() {
     team: 'RED' | 'BLUE'
     action: 'hint' | 'guess'
   } | null>(null)
-  // Track AI loading state: { team: 'RED' | 'BLUE', action: 'hint' | 'guess' } | null
-  const [aiLoading, setAiLoading] = useState<{
-    team: 'RED' | 'BLUE'
-    action: 'hint' | 'guess'
-  } | null>(null)
 
   // Auto-trigger AI actions when it's an AI's turn
   useEffect(() => {
     if (!gameState || !gameId || gameState.is_game_over) {
       aiActionTriggeredRef.current = ''
-      setAiLoading(null)
       setAiLoading(null)
       return
     }
@@ -270,7 +264,6 @@ function Game() {
       if (currentRole === 'HINTER') {
         // AI Spymaster - give hint
         setAiLoading({ team: currentTeam, action: 'hint' })
-        setAiLoading({ team: currentTeam, action: 'hint' })
         fetch(new URL(`/games/${gameId}/ai/hint`, API_URL), {
           method: 'POST',
           headers: {
@@ -294,12 +287,10 @@ function Game() {
             })
             aiActionTriggeredRef.current = '' // Reset to allow next turn
             setAiLoading(null)
-            setAiLoading(null)
           })
           .catch((error) => {
             console.error('AI hint error:', error)
             aiActionTriggeredRef.current = '' // Reset on error
-            setAiLoading(null)
             setAiLoading(null)
           })
       } else if (currentRole === 'GUESSER') {
@@ -329,19 +320,16 @@ function Game() {
             })
             aiActionTriggeredRef.current = '' // Reset to allow next turn
             setAiLoading(null)
-            setAiLoading(null)
           })
           .catch((error) => {
             console.error('AI guess error:', error)
             aiActionTriggeredRef.current = '' // Reset on error
-            setAiLoading(null)
             setAiLoading(null)
           })
       }
     } else {
       // Reset when it's a human turn
       aiActionTriggeredRef.current = ''
-      setAiLoading(null)
       setAiLoading(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -574,7 +562,6 @@ function Game() {
               gameId={gameId!}
               onHintSubmitted={() => setSpymasterView(false)}
               aiLoading={aiLoading}
-              aiLoading={aiLoading}
             />
           </div>
           <div className='col-span-3 bg-gray-200 p-4'>
@@ -618,7 +605,6 @@ function Game() {
               gameState={gameState}
               gameType={gameType.blue}
               aiLoading={aiLoading}
-              aiLoading={aiLoading}
               gameId={gameId!}
               onHintSubmitted={() => setSpymasterView(false)}
             />
@@ -652,7 +638,6 @@ type ChatHistoryProps = {
   gameId: string
   onHintSubmitted: () => void
   aiLoading: { team: 'RED' | 'BLUE'; action: 'hint' | 'guess' } | null
-  aiLoading: { team: 'RED' | 'BLUE'; action: 'hint' | 'guess' } | null
 }
 
 function ChatHistory({
@@ -661,7 +646,6 @@ function ChatHistory({
   gameType,
   gameId,
   onHintSubmitted,
-  aiLoading,
   aiLoading,
 }: ChatHistoryProps) {
   const [hint, setHint] = useState('')
@@ -866,20 +850,7 @@ function ChatHistory({
           !(aiLoading && aiLoading.team === team) && (
             <div className='text-gray-400 text-sm'>No activity yet</div>
           )}
-        {aiLoading && aiLoading.team === team && (
-          <div
-            className={`p-2 rounded text-sm italic ${
-              team === 'RED' ? 'bg-red-50' : 'bg-blue-50'
-            }`}
-          >
-            {aiLoading.action === 'hint'
-              ? 'AI is thinking of a hint...'
-              : 'AI is making guesses...'}
-          </div>
-            : gameState.event_history.blue_team.length === 0)) &&
-          !(aiLoading && aiLoading.team === team) && (
-            <div className='text-gray-400 text-sm'>No activity yet</div>
-          )}
+
         {aiLoading && aiLoading.team === team && (
           <div
             className={`p-2 rounded text-sm italic ${
