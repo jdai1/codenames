@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { cva } from 'class-variance-authority'
 import { useState } from 'react'
 
@@ -74,10 +74,12 @@ type CreateGameResponse = {
   game_state: GameState
 }
 
-function App() {
+function Game() {
   const [gameType, setGameType] = useState<GameType>(defaultGameType)
   const [gameId, setGameId] = useState<string | null>(null)
   const [spymasterView, setSpymasterView] = useState(false)
+
+  const queryClient = useQueryClient()
 
   const createNewGame = useMutation({
     mutationFn: async () => {
@@ -94,17 +96,31 @@ function App() {
       const data: CreateGameResponse = await response.json()
       return data
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       setGameId(data.game_id)
+      // Store the full game state (with show_colors=true) for spymaster view
+      queryClient.setQueryData(['gameStateFull', data.game_id], data.game_state)
+      // Fetch and store the operative view (with show_colors=false)
+      const operativeResponse = await fetch(
+        new URL(`/games/${data.game_id}?show_colors=false`, API_URL),
+        {
+          method: 'GET',
+        }
+      )
+      if (operativeResponse.ok) {
+        const operativeState = await operativeResponse.json()
+        queryClient.setQueryData(['gameState', data.game_id], operativeState)
+      }
     },
   })
 
-  const { data: gameState, isLoading } = useQuery<GameState>({
-    queryKey: ['gameState', gameId, spymasterView],
+  // Query for operative view (show_colors=false) - this is the main query that gets updated
+  const { data: gameStateOperative, isLoading } = useQuery<GameState>({
+    queryKey: ['gameState', gameId],
     queryFn: async () => {
       if (!gameId) return null
       const response = await fetch(
-        new URL(`/games/${gameId}?show_colors=${spymasterView}`, API_URL),
+        new URL(`/games/${gameId}?show_colors=false`, API_URL),
         {
           method: 'GET',
         }
@@ -116,6 +132,30 @@ function App() {
     },
     enabled: !!gameId,
   })
+
+  // Query for spymaster view (show_colors=true) - stored separately, only fetches if not in cache
+  const { data: gameStateFull } = useQuery<GameState>({
+    queryKey: ['gameStateFull', gameId],
+    queryFn: async () => {
+      if (!gameId) return null
+      const response = await fetch(
+        new URL(`/games/${gameId}?show_colors=true`, API_URL),
+        {
+          method: 'GET',
+        }
+      )
+      if (!response.ok) {
+        throw new Error('Failed to fetch game state')
+      }
+      return response.json()
+    },
+    enabled: !!gameId,
+    staleTime: Infinity, // Never refetch spymaster view automatically
+    gcTime: Infinity, // Keep in cache forever
+  })
+
+  // Use the appropriate game state based on spymasterView
+  const gameState = spymasterView ? gameStateFull : gameStateOperative
 
   const getCardType = (card: CardWithIndex): CardProps['type'] => {
     if (!card.revealed && !spymasterView) {
@@ -345,4 +385,4 @@ function PlayerTypeSelect({
   )
 }
 
-export default App
+export default Game
