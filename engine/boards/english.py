@@ -165,7 +165,6 @@ ENGLISH_WORDS = [
     "internet",
     "invasion",
     "iron",
-    "jew",
     "joke",
     "judge",
     "justify",
