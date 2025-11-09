@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { cva } from 'class-variance-authority'
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 const API_URL = 'http://localhost:8080'
 
@@ -272,7 +272,11 @@ function Game() {
       {gameState && (
         <div className='grid grid-cols-5 h-full'>
           <div className='col-span-1 bg-gray-100'>
-            <ChatHistory team='RED' gameState={gameState} />
+            <ChatHistory
+              team='RED'
+              gameState={gameState}
+              gameType={gameType.red}
+            />
           </div>
           <div className='col-span-3 bg-gray-200 p-4'>
             <div
@@ -291,7 +295,11 @@ function Game() {
             </div>
           </div>
           <div className='col-span-1 bg-gray-100'>
-            <ChatHistory team='BLUE' gameState={gameState} />
+            <ChatHistory
+              team='BLUE'
+              gameState={gameState}
+              gameType={gameType.blue}
+            />
           </div>
         </div>
       )}
@@ -318,12 +326,27 @@ const TEAM_NAME_TO_COLOR = {
 type ChatHistoryProps = {
   team: 'RED' | 'BLUE'
   gameState: GameState
+  gameType: { spymaster: PlayerTypeId; guesser: PlayerTypeId }
 }
 
-function ChatHistory({ team, gameState }: ChatHistoryProps) {
+function ChatHistory({ team, gameState, gameType }: ChatHistoryProps) {
   const [hint, setHint] = useState('')
+  const hintInputRef = useRef<HTMLInputElement>(null)
 
   const score = team === 'RED' ? gameState.score.red : gameState.score.blue
+
+  const isCurrentTeam = gameState.current_turn.team === team
+  const isSpymasterTurn =
+    isCurrentTeam && gameState.current_turn.role === 'HINTER'
+  const isHumanSpymaster = gameType.spymaster === 'HUMAN'
+  const shouldEnableHintInput = isSpymasterTurn && isHumanSpymaster
+
+  // Focus the input when it becomes enabled (human hinter's turn)
+  useEffect(() => {
+    if (shouldEnableHintInput && hintInputRef.current) {
+      hintInputRef.current.focus()
+    }
+  }, [shouldEnableHintInput])
 
   return (
     <div className='p-4 flex flex-col h-full gap-4'>
@@ -336,13 +359,19 @@ function ChatHistory({ team, gameState }: ChatHistoryProps) {
       </div>
 
       <input
+        ref={hintInputRef}
         type='text'
         className='border border-gray-300 p-2'
         value={hint}
         onChange={(event) => setHint(event.target.value)}
+        disabled={!shouldEnableHintInput}
+        placeholder={shouldEnableHintInput ? 'Enter hint word' : ''}
       />
 
-      <button className='rounded bg-teal-500 p-2' disabled={!hint}>
+      <button
+        className='rounded bg-teal-500 p-2'
+        disabled={!hint || !shouldEnableHintInput}
+      >
         Submit hint
       </button>
     </div>
