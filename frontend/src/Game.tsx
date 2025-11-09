@@ -250,7 +250,7 @@ function Game() {
     if (playerType === 'GPT5') return 'gpt-5'
     if (playerType === 'CLAUDE_SONNET') return 'claude-sonnet'
     if (playerType === 'GEMINI_2_5_PRO') return 'gemini/gemini-2.5-pro'
-    if (playerType === 'GROK_4') return 'grok-4'
+    if (playerType === 'GROK_4') return 'xai/grok-4-fast-reasoning'
     if (playerType === 'KIMI_K2_THINKING') return 'kimi-k2-thinking'
     if (playerType === 'ZAI_4_6') return 'zai-4.6'
     if (playerType === 'OPENAI_OSS') return 'openai oss'
@@ -912,7 +912,7 @@ function Game() {
 
       {gameState && (
         <div className='grid grid-cols-5 h-[calc(100vh-100px)] grow'>
-          <div className='col-span-1 bg-gray-100 overflow-scroll'>
+          <div className='col-span-1 f overflow-scroll'>
             <ChatHistory
               team='RED'
               gameState={gameState}
@@ -1258,7 +1258,13 @@ function ChatHistory({
                   <span className='font-semibold'>
                     {event.guess.guessed_card.word}
                   </span>{' '}
-                  <span className={isCorrect ? 'text-green-700 font-semibold' : 'text-red-600'}>
+                  <span
+                    className={
+                      isCorrect
+                        ? 'text-green-700 font-semibold'
+                        : 'text-red-600'
+                    }
+                  >
                     {isCorrect ? '✓ Correct' : '✗ Wrong'}
                   </span>
                 </div>
@@ -1267,7 +1273,7 @@ function ChatHistory({
               return (
                 <div
                   key={`event-${idx}`}
-                  className='px-3 py-2 rounded-lg bg-gradient-to-br from-gray-50 to-gray-100/50 border border-gray-200/50 text-sm text-gray-600 italic shadow-sm'
+                  className='px-3 py-2 rounded-lg bg-gray-200 from-gray-50 to-gray-100/50 border border-gray-200/50 text-sm text-gray-600 italic shadow-sm'
                 >
                   Passed turn
                 </div>
@@ -1276,7 +1282,7 @@ function ChatHistory({
               return (
                 <div
                   key={`event-${idx}`}
-                  className='px-3 py-2 rounded-lg bg-gradient-to-br from-blue-100 to-blue-200/70 border border-blue-300/70 text-sm italic shadow-sm'
+                  className='px-3 py-2 rounded-lg bg-gray-200 from-blue-100 to-blue-200/70 border border-blue-300/70 text-sm italic shadow-sm'
                 >
                   <span className='font-semibold not-italic text-blue-900'>
                     {formatActorName(event.actor.name)}:
@@ -1358,7 +1364,9 @@ function ChatHistory({
                   <span className='font-semibold not-italic text-emerald-900'>
                     {formatActorName(event.actor.name)}
                   </span>{' '}
-                  <span className='text-gray-700'>voted to pass: {event.message}</span>
+                  <span className='text-gray-700'>
+                    voted to pass: {event.message}
+                  </span>
                 </div>
               )
             }
@@ -1582,16 +1590,32 @@ function Card({
         {(revealed || spymasterView) && (
           <span className='flex justify-center mb-2'>
             {type === 'RED' && (
-              <img src={'/red.svg'} alt='Red' className='h-14 w-14' />
+              <img
+                src={'/red.svg'}
+                alt='Red'
+                style={{ width: 'min(3vw, 4vh)' }}
+              />
             )}
             {type === 'BLUE' && (
-              <img src={'/blue.svg'} alt='Blue' className='h-14 w-14' />
+              <img
+                src={'/blue.svg'}
+                alt='Blue'
+                style={{ width: 'min(3vw, 4vh)' }}
+              />
             )}
             {type === 'ASSASSIN' && (
-              <img src={'/assassin.svg'} alt='Assassin' className='h-14 w-14' />
+              <img
+                src={'/assassin.svg'}
+                alt='Assassin'
+                style={{ width: 'min(3vw, 4vh)' }}
+              />
             )}
             {type === 'NEUTRAL' && (
-              <img src={'/innocent.svg'} alt='Neutral' className='h-14 w-14' />
+              <img
+                src={'/innocent.svg'}
+                alt='Neutral'
+                style={{ width: 'min(3vw, 4vh)' }}
+              />
             )}
           </span>
         )}
