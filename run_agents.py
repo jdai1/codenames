@@ -17,6 +17,8 @@ from agents.prompts import (
 
 from engine.game_main import CodenamesGame, GameStateResponse
 from engine.game.events import LLMActor
+from engine.game.exceptions import CardNotFoundError
+from engine.game.base import canonical_format
 
 
 def _name(val: Any) -> str:
@@ -126,13 +128,14 @@ def spymaster_turn(
     message_history: List[Dict[str, str]],
 ) -> Tuple[bool, Dict[str, Any]]:
     """Handle a single spymaster turn. Returns (success, result_dict)."""
-    # Build spymaster view
     state = game.get_state(show_colors=True)
     board_str = format_board_for_spymaster(game)
     team = _name(state.current_turn.team)
     team_emoji = _team_to_emoji(team)
     opponent_emoji = _team_to_emoji("RED") if team == "BLUE" else _team_to_emoji("BLUE")
     remaining = remaining_words_for_team(state, team)
+    board_words = set(game.state.board.all_words)
+
     user_msg = SPYMASTER_USER_PROMPT.format(
         team=team,
         team_emoji=team_emoji,
@@ -141,44 +144,64 @@ def spymaster_turn(
         remaining_words=remaining,
     )
 
-    inc_llm_calls(step=f"{spymaster.name}.run")
-    result, assistant_msg, _, _ = spymaster.run(
-        user_message=user_msg, message_history=message_history
-    )
-    private_reasoning = (
-        result.get("reasoning") or (assistant_msg.get("reasoning_content") or "")
-    ).strip()
-    visible = (assistant_msg.get("content") or "").strip()
-    combined_parts = []
-    if private_reasoning:
-        combined_parts.append(f"[PRIVATE REASONING]\n{private_reasoning}")
-    if visible:
-        combined_parts.append(visible)
-    combined_message = "\n\n".join(combined_parts)
-    if combined_message:
-        message_history.append(
-            {"role": "assistant", "content": f"SPYMASTER: {combined_message}"}
+    max_attempts = max(1, spymaster.max_iterations)
+    for _ in range(max_attempts):
+        inc_llm_calls(step=f"{spymaster.name}.run")
+        result, assistant_msg, _, _ = spymaster.run(
+            user_message=user_msg, message_history=message_history
         )
-    if result.get("type") != "hint":
-        return False, {"reason": f"unexpected result: {result}"}
+        private_reasoning = (
+            result.get("reasoning") or (assistant_msg.get("reasoning_content") or "")
+        ).strip()
+        visible = (assistant_msg.get("content") or "").strip()
+        combined_parts = []
+        if private_reasoning:
+            combined_parts.append(f"[PRIVATE REASONING]\n{private_reasoning}")
+        if visible:
+            combined_parts.append(visible)
+        combined_message = "\n\n".join(combined_parts)
+        if combined_message:
+            message_history.append(
+                {"role": "assistant", "content": f"SPYMASTER: {combined_message}"}
+            )
+        if result.get("type") != "hint":
+            return False, {"reason": f"unexpected result: {result}"}
 
-    clue = result.get("clue")
-    qty = int(result.get("quantity", 1))
+        clue_raw = result.get("clue") or ""
+        clue = clue_raw.strip()
+        qty = int(result.get("quantity", 1))
 
-    # Create LLM actor for this spymaster
-    actor = LLMActor(name=spymaster.name, model=spymaster.model)
+        if canonical_format(clue) in board_words:
+            message_history.append(
+                {
+                    "role": "user",
+                    "content": (
+                        f"system: hint rejected for {clue.upper()}: "
+                        "clue cannot be a card on the board. Choose another word."
+                    ),
+                }
+            )
+            continue
 
-    try:
-        hint_res = game.give_hint(word=clue, card_amount=qty, actor=actor)
-    except Exception as e:  # pylint: disable=broad-except
-        return False, {"reason": f"hint rejected: {e}", "clue": clue, "quantity": qty}
-    if not hint_res.success:
-        return False, {
-            "reason": hint_res.reason or "hint not applied",
-            "clue": clue,
-            "quantity": qty,
-        }
-    return True, {"clue": clue, "quantity": qty}
+        actor = LLMActor(name=spymaster.name, model=spymaster.model)
+
+        try:
+            hint_res = game.give_hint(word=clue, card_amount=qty, actor=actor)
+        except Exception as e:  # pylint: disable=broad-except
+            return False, {
+                "reason": f"hint rejected: {e}",
+                "clue": clue,
+                "quantity": qty,
+            }
+        if not hint_res.success:
+            return False, {
+                "reason": hint_res.reason or "hint not applied",
+                "clue": clue,
+                "quantity": qty,
+            }
+        return True, {"clue": clue, "quantity": qty}
+
+    return False, {"reason": "hint attempts exhausted"}
 
 
 def collect_majority_vote(votes: List[str], quorum: int) -> str | None:
@@ -243,6 +266,38 @@ def guesser_turn(
                 elif result.get("type") == "vote":
                     word = str(result.get("word", "")).strip()
                     if word:
+                        try:
+                            card_index = game.state.board.find_card_index(word)
+                        except CardNotFoundError:
+                            message_history.append(
+                                {
+                                    "role": "user",
+                                    "content": (
+                                        f"system: vote rejected for {word.upper()}: "
+                                        "word not on the board."
+                                    ),
+                                }
+                            )
+                            print(
+                                f"{agent.name.upper()} attempted invalid vote {word.upper()} (not on board)"
+                            )
+                            continue
+                        card = game.state.board.cards[card_index]
+                        if card.revealed:
+                            message_history.append(
+                                {
+                                    "role": "user",
+                                    "content": (
+                                        f"system: vote rejected for {word.upper()}: "
+                                        "card already revealed."
+                                    ),
+                                }
+                            )
+                            print(
+                                f"{agent.name.upper()} attempted invalid vote {word.upper()} (already revealed)"
+                            )
+                            continue
+
                         previous_vote = votes_by_agent.get(agent.name)
                         votes_by_agent[agent.name] = word
                         changed = (

@@ -23,6 +23,9 @@ Each round proceeds through collaborative discussion and decision-making:
 
 You may change your vote at any time to any other word or to pass. You may also continue talking after voting if you or any other player disagrees or wants to add on more thoughts.
 
+IMPORTANT: That the clue you are getting is not ground truth! It comes from another AI agent who is the Spymaster, who can definitely be wrong or give bad clues.
+If you think the clue is bad or are generally unsure, you should definitely vote to pass rather than guess randomly or draw really long connections.
+
 You will continuously converse with other operatives until you vote for the same word or pass.
 """
 
