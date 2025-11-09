@@ -120,8 +120,8 @@ type CreateGameResponse = {
 
 function Game() {
   const [gameType, setGameType] = useState<GameType>(defaultGameType)
-  const [redOperators, setRedOperators] = useState<number>(1)
-  const [blueOperators, setBlueOperators] = useState<number>(1)
+  const [redOperators, setRedOperators] = useState<number>(3)
+  const [blueOperators, setBlueOperators] = useState<number>(3)
   const [gameId, setGameId] = useState<string | null>(null)
   const [spymasterView, setSpymasterView] = useState(false)
   const [useNeoWords, setUseNeoWords] = useState(false)
