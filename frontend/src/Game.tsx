@@ -17,12 +17,12 @@ type GameType = {
 
 const defaultGameType = {
   red: {
-    spymaster: 'GPT4_1',
-    guesser: 'GPT4_1',
+    spymaster: 'GPT5',
+    guesser: 'GPT5',
   },
   blue: {
-    spymaster: 'GPT4_1',
-    guesser: 'GPT4_1',
+    spymaster: 'GPT5',
+    guesser: 'GPT5',
   },
 } as const
 
@@ -1009,6 +1009,7 @@ function Game() {
                 </div>
               ) : (
                 <>
+                  <span className='text-gray-600 font-medium'>Turn: </span>
                   <span
                     className={`font-extrabold tracking-wide ${
                       gameState.current_turn.team === 'RED'
@@ -1024,7 +1025,11 @@ function Game() {
                     <>
                       <span className='text-gray-600 font-medium'>
                         {' '}
-                        ({gameState.current_turn.left_guesses} {gameState.current_turn.left_guesses === 1 ? 'guess' : 'guesses'} left)
+                        ({gameState.current_turn.left_guesses}{' '}
+                        {gameState.current_turn.left_guesses === 1
+                          ? 'guess'
+                          : 'guesses'}{' '}
+                        left)
                       </span>
                       {(() => {
                         const hint = getLatestHintForTeam(
@@ -1523,18 +1528,20 @@ function ChatHistory({
             }
             return null
           })}
-          {gameState.is_game_over && gameState.winner && gameState.winner.team_color === team && (
-          <div
-            className={`px-4 py-3 rounded-lg shadow-lg text-center font-bold text-lg ${
-              team === 'RED'
-                ? 'bg-gradient-to-br from-red-200 to-red-300 border-2 border-red-400 text-red-800'
-                : 'bg-gradient-to-br from-cyan-200 to-cyan-300 border-2 border-cyan-400 text-cyan-800'
-            }`}
-          >
-            🎉 {team} TEAM WINS!
-          </div>
-        )}
-        
+        {gameState.is_game_over &&
+          gameState.winner &&
+          gameState.winner.team_color === team && (
+            <div
+              className={`px-4 py-3 rounded-lg shadow-lg text-center font-bold text-lg ${
+                team === 'RED'
+                  ? 'bg-gradient-to-br from-red-200 to-red-300 border-2 border-red-400 text-red-800'
+                  : 'bg-gradient-to-br from-cyan-200 to-cyan-300 border-2 border-cyan-400 text-cyan-800'
+              }`}
+            >
+              🎉 {team} TEAM WINS!
+            </div>
+          )}
+
         {(() => {
           const noTeamActivity =
             !gameState.event_history ||
@@ -1558,7 +1565,7 @@ function ChatHistory({
               </div>
             )
           }
-          
+
           return (
             <div className='text-gray-400 text-sm text-center py-8'>
               No activity yet
