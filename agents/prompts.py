@@ -18,6 +18,8 @@ Each round proceeds through collaborative discussion and decision-making:
 - You may call a tool to vote for what the next move should be. Only call this tool if you have already discussed the board and the clue with the other Operatives and seem to be nearing consensus. The vote will go into effect if a majority of the operatives vote for the same word.
 - You may also pass your turn if you aren't sure what to guess. This will also go into effect if a majority of the operatives vote to pass.
 
+You may change your vote at any time to any other word or to pass. You may also continue talking after voting if you or any other player disagrees or wants to add on more thoughts.
+
 You will continuously converse with other operatives until you vote for the same word or pass.
 """
 

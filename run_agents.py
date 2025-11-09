@@ -138,26 +138,32 @@ def guesser_turn(
         if last_hint is None:
             return
 
-        votes_accumulated: List[str] = []
+        votes_by_agent: Dict[str, str] = {}
+
+        def formatted_votes() -> str:
+            if not votes_by_agent:
+                return "(none)"
+            return ", ".join(
+                f"{agent_name}: {'PASS' if vote.lower() == 'pass' else vote.upper()}"
+                for agent_name, vote in votes_by_agent.items()
+            )
 
         # Iterate limited discussion/voting rounds to reach majority
         for round_i in range(max_rounds):
-            votes_this_cycle: List[str] = []  # reset per discussion round
             # Show current board and clue at the start of each discussion round
             print("\n=== Guesser Discussion Round", round_i + 1, "===")
             print("Board (spectator view - uncensored):")
             print(format_board_for_spymaster(game))
             print(f"Clue: {last_hint.word.upper()} {last_hint.card_amount}")
             for agent in ops:
+                votes_display = formatted_votes()
                 user_msg = OPERATIVE_USER_PROMPT.format(
                     team=_name(team_turn),
                     board=board_str,
                     clue=last_hint.word,
                     number=last_hint.card_amount,
                     left_guesses=game.get_current_turn().left_guesses,
-                    votes=", ".join(votes_accumulated)
-                    if votes_accumulated
-                    else "(none)",
+                    votes=votes_display,
                 )
 
                 print(f"Operative user message: {user_msg}")
@@ -180,23 +186,50 @@ def guesser_turn(
                 elif result.get("type") == "vote":
                     word = str(result.get("word", "")).strip()
                     if word:
-                        votes_this_cycle.append(word)
-                        votes_accumulated.append(word)
-                        print(f"[{agent.name}] votes: {word.upper()}")
+                        previous_vote = votes_by_agent.get(agent.name)
+                        votes_by_agent[agent.name] = word
+                        changed = (
+                            previous_vote is not None
+                            and previous_vote.lower() != word.lower()
+                        )
+                        reaffirmed = (
+                            previous_vote is not None
+                            and previous_vote.lower() == word.lower()
+                        )
+                        suffix = (
+                            " (updated)"
+                            if changed
+                            else (" (unchanged)" if reaffirmed else "")
+                        )
+                        print(f"[{agent.name}] votes: {word.upper()}{suffix}")
                 elif result.get("type") == "pass":
                     # Treat 'pass' as a vote option; require majority like word guesses
-                    votes_this_cycle.append("pass")
-                    votes_accumulated.append("pass")
-                    print(f"[{agent.name}] votes: PASS")
+                    previous_vote = votes_by_agent.get(agent.name)
+                    votes_by_agent[agent.name] = "pass"
+                    changed = (
+                        previous_vote is not None and previous_vote.lower() != "pass"
+                    )
+                    reaffirmed = (
+                        previous_vote is not None and previous_vote.lower() == "pass"
+                    )
+                    suffix = (
+                        " (updated)"
+                        if changed
+                        else (" (unchanged)" if reaffirmed else "")
+                    )
+                    print(f"[{agent.name}] votes: PASS{suffix}")
                 else:
                     # Ignore unknown result types
                     pass
 
                 # Check majority after each action
-                majority = collect_majority_vote(votes_this_cycle, quorum=len(ops))
+                majority = collect_majority_vote(
+                    list(votes_by_agent.values()), quorum=len(ops)
+                )
                 if majority:
                     if majority == "pass":
                         # Majority agrees to pass
+                        vote_summary = formatted_votes()
                         try:
                             _ = game.pass_turn()
                         except Exception as e:  # pylint: disable=broad-except
@@ -211,13 +244,15 @@ def guesser_turn(
                             message_history.append(
                                 {
                                     "role": "assistant",
-                                    "content": "system: team decided to PASS",
+                                    "content": f"system: team decided to PASS; votes={vote_summary}",
                                 }
                             )
                             print("Team reached majority to PASS. Passing turn.")
+                        votes_by_agent.clear()
                         return
                     else:
                         guess_word = majority
+                        vote_summary = formatted_votes()
                         try:
                             guess_res = game.make_guess(word=guess_word)
                         except Exception as e:  # pylint: disable=broad-except
@@ -241,6 +276,13 @@ def guesser_turn(
                         print(
                             f"Guess -> {guess_word.upper()} ({correctness}); left_guesses={guess_res.left_guesses}"
                         )
+                        if vote_summary != "(none)":
+                            message_history.append(
+                                {
+                                    "role": "assistant",
+                                    "content": f"system: vote summary -> {vote_summary}",
+                                }
+                            )
                         # Show updated board after guess
                         print("Board (spectator view - uncensored) after guess:")
                         print(format_board_for_spymaster(game))
@@ -258,6 +300,7 @@ def guesser_turn(
                             return
 
                         # Continue to next guess in same turn
+                        votes_by_agent.clear()
                         break  # break inner loop to start a new guess cycle within same turn
 
         # Reached here with no majority across all rounds -> pass the turn
