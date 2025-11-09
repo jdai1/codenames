@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { cva } from 'class-variance-authority'
 import { useState, useRef, useEffect } from 'react'
-import { useState, useRef, useEffect } from 'react'
 
 const API_URL = 'http://localhost:8080'
 
@@ -174,6 +173,64 @@ function Game() {
   const boardSize = gameState?.board_size || 25
   const gridCols = Math.sqrt(boardSize)
 
+  // Handler for card clicks (guesses)
+  const handleCardGuess = async (word: string) => {
+    if (!gameId || !gameState) return
+
+    const isGuesserTurn = gameState.current_turn.role === 'GUESSER'
+    const currentTeam = gameState.current_turn.team
+    const isHumanGuesser =
+      (currentTeam === 'RED' ? gameType.red.guesser : gameType.blue.guesser) ===
+      'HUMAN'
+
+    if (isGuesserTurn && isHumanGuesser) {
+      try {
+        // Make the guess via API
+        const response = await fetch(
+          new URL(`/games/${gameId}/guess`, API_URL),
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ word }),
+          }
+        )
+
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || 'Failed to make guess')
+        }
+
+        // Explicitly refetch game state from the endpoint
+        const operativeResponse = await fetch(
+          new URL(`/games/${gameId}?show_colors=false`, API_URL),
+          {
+            method: 'GET',
+          }
+        )
+        if (operativeResponse.ok) {
+          const operativeState = await operativeResponse.json()
+          queryClient.setQueryData(['gameState', gameId], operativeState)
+        }
+
+        const fullResponse = await fetch(
+          new URL(`/games/${gameId}?show_colors=true`, API_URL),
+          {
+            method: 'GET',
+          }
+        )
+        if (fullResponse.ok) {
+          const fullState = await fullResponse.json()
+          queryClient.setQueryData(['gameStateFull', gameId], fullState)
+        }
+      } catch (error) {
+        console.error('Guess error:', error)
+        // Error will be handled by the query invalidation refreshing the state
+      }
+    }
+  }
+
   return (
     <div className='flex flex-col h-screen'>
       <div className='p-4 flex justify-between'>
@@ -288,13 +345,32 @@ function Game() {
                 gridTemplateColumns: `repeat(${gridCols}, 1fr)`,
               }}
             >
-              {gameState.board.map((card) => (
-                <Card
-                  label={card.word}
-                  type={getCardType(card)}
-                  key={card.index}
-                />
-              ))}
+              {gameState.board.map((card) => {
+                const isGuesserTurn = gameState.current_turn.role === 'GUESSER'
+                const currentTeam = gameState.current_turn.team
+                const isHumanGuesser =
+                  (currentTeam === 'RED'
+                    ? gameType.red.guesser
+                    : gameType.blue.guesser) === 'HUMAN'
+                const canClick =
+                  !spymasterView &&
+                  !card.revealed &&
+                  isGuesserTurn &&
+                  isHumanGuesser
+
+                return (
+                  <Card
+                    label={card.word}
+                    type={getCardType(card)}
+                    key={card.index}
+                    onClick={
+                      canClick ? () => handleCardGuess(card.word) : undefined
+                    }
+                    clickable={canClick}
+                    revealed={card.revealed}
+                  />
+                )
+              })}
             </div>
           </div>
           <div className='col-span-1 bg-gray-100'>
@@ -377,12 +453,33 @@ function ChatHistory({
       }
       return response.json()
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['gameState', gameId] })
-      queryClient.invalidateQueries({ queryKey: ['gameStateFull', gameId] })
+    onSuccess: async () => {
       setHint('')
       setHintCount('')
       onHintSubmitted() // Turn off spymaster view
+
+      // Explicitly refetch game state from the endpoint
+      const operativeResponse = await fetch(
+        new URL(`/games/${gameId}?show_colors=false`, API_URL),
+        {
+          method: 'GET',
+        }
+      )
+      if (operativeResponse.ok) {
+        const operativeState = await operativeResponse.json()
+        queryClient.setQueryData(['gameState', gameId], operativeState)
+      }
+
+      const fullResponse = await fetch(
+        new URL(`/games/${gameId}?show_colors=true`, API_URL),
+        {
+          method: 'GET',
+        }
+      )
+      if (fullResponse.ok) {
+        const fullState = await fullResponse.json()
+        queryClient.setQueryData(['gameStateFull', gameId], fullState)
+      }
     },
   })
 
@@ -460,9 +557,12 @@ function ChatHistory({
 type CardProps = {
   label: string
   type: 'UNKNOWN' | 'NEUTRAL' | 'RED' | 'BLUE' | 'ASSASSIN'
+  onClick?: () => void
+  clickable?: boolean
+  revealed?: boolean
 }
 
-function Card({ label, type }: CardProps) {
+function Card({ label, type, onClick, clickable, revealed }: CardProps) {
   const card = cva(
     ['bold', 'border', 'border-gray-300', 'px-4 py-8', 'text-center'],
     {
@@ -477,7 +577,21 @@ function Card({ label, type }: CardProps) {
       },
     }
   )
-  return <div className={card({ type })}>{label}</div>
+
+  const baseClasses = card({ type })
+  const clickableClasses = clickable
+    ? 'cursor-pointer hover:opacity-80 hover:shadow-md transition-all'
+    : ''
+  const disabledClasses = revealed ? 'opacity-60 cursor-not-allowed' : ''
+
+  return (
+    <div
+      className={`${baseClasses} ${clickableClasses} ${disabledClasses}`}
+      onClick={clickable && !revealed && onClick ? onClick : undefined}
+    >
+      {label}
+    </div>
+  )
 }
 
 type PlayerTypeId = 'HUMAN' | 'GPT5' | 'GEMINI'
