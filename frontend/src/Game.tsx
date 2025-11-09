@@ -19,8 +19,12 @@ const defaultGameType = {
   red: {
     spymaster: 'GPT4_1',
     guesser: 'GPT4_1',
+    spymaster: 'GPT4_1',
+    guesser: 'GPT4_1',
   },
   blue: {
+    spymaster: 'GPT4_1',
+    guesser: 'GPT4_1',
     spymaster: 'GPT4_1',
     guesser: 'GPT4_1',
   },
@@ -230,7 +234,9 @@ function Game() {
   // Map player type to model name
   const getModelName = (playerType: PlayerTypeId): string => {
     if (playerType === 'GPT4_1') return 'gpt-4.1'
+    if (playerType === 'GPT4_1') return 'gpt-4.1'
     if (playerType === 'GEMINI') return 'gemini'
+    return 'gpt-4.1' // default
     return 'gpt-4.1' // default
   }
 
@@ -1364,6 +1370,7 @@ function Card({ label, type, onClick, clickable, revealed }: CardProps) {
   )
 }
 
+type PlayerTypeId = 'HUMAN' | 'GPT4_1' | 'GEMINI'
 type PlayerTypeId = 'HUMAN' | 'GPT4_1' | 'GEMINI'
 type PlayerType = {
   label: string
