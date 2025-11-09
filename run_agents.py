@@ -3,12 +3,16 @@ import json
 from collections import Counter, defaultdict
 from typing import List, Dict, Any, Tuple
 
+from litellm import completion
+
 from agents.agent import Agent
 from agents.prompts import (
     OPERATIVE_SYSTEM_PROMPT,
     OPERATIVE_USER_PROMPT,
     SPYMASTER_SYSTEM_PROMPT,
     SPYMASTER_USER_PROMPT,
+    SUMMARIZER_SYSTEM_PROMPT,
+    SUMMARIZER_USER_PROMPT,
 )
 
 from engine.game_main import CodenamesGame, GameStateResponse
@@ -32,6 +36,45 @@ def format_board_for_spymaster(game: CodenamesGame) -> str:
 def format_board_for_operatives(game: CodenamesGame) -> str:
     """Render the board using engine's visual table (operative view)."""
     return str(game.state.board.censored)
+
+
+def summarize_round_messages(
+    messages: List[Dict[str, str]], model: str, max_tokens: int = 256
+) -> str:
+    """Summarize a single round of operative discussion for spymaster context."""
+    if not messages:
+        return ""
+
+    transcript_lines: List[str] = []
+    for msg in messages:
+        role = msg.get("role", "assistant").upper()
+        content = msg.get("content", "").strip()
+        if not content:
+            continue
+        transcript_lines.append(f"{role}: {content}")
+
+    if not transcript_lines:
+        return ""
+
+    user_prompt = SUMMARIZER_USER_PROMPT.format(transcript="\n".join(transcript_lines))
+    summary_messages = [
+        {
+            "role": "system",
+            "content": SUMMARIZER_SYSTEM_PROMPT.strip(),
+        },
+        {"role": "user", "content": user_prompt},
+    ]
+
+    try:
+        resp = completion(
+            model=model,
+            messages=summary_messages,
+            max_tokens=max_tokens,
+        )
+        return resp["choices"][0]["message"].get("content", "").strip()
+    except Exception as exc:  # pylint: disable=broad-except
+        print(f"Failed to summarize operative round: {exc}")
+        return ""
 
 
 def remaining_words_for_team(state: GameStateResponse, team: Any) -> int:
@@ -90,6 +133,13 @@ def spymaster_turn(
     result, assistant_msg, _, _ = spymaster.run(
         user_message=user_msg, message_history=message_history
     )
+    reasoning = (assistant_msg.get("reasoning_content") or "").strip()
+    visible = (assistant_msg.get("content") or "").strip()
+    combined_message = "\n\n".join(part for part in (reasoning, visible) if part)
+    if combined_message:
+        message_history.append(
+            {"role": "assistant", "content": f"SPYMASTER: {combined_message}"}
+        )
     if result.get("type") != "hint":
         return False, {"reason": f"unexpected result: {result}"}
 
@@ -358,7 +408,19 @@ def main():
             round_number += 1
         else:
             ops = blue_ops if team_key == "BLUE" else red_ops
+            history_before = len(operative_histories[team_key])
             guesser_turn(game, ops, operative_histories[team_key])
+            round_messages = operative_histories[team_key][history_before:]
+            summary = summarize_round_messages(round_messages, model=model)
+            if summary:
+                spymaster_histories[team_key].append(
+                    {
+                        "role": "assistant",
+                        "content": f"OPERATIVE SUMMARY: {summary}",
+                    }
+                )
+
+        # breakpoint()
 
         # Print a light summary of board progress
         s = game.get_state(show_colors=False)
