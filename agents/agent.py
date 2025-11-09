@@ -59,6 +59,7 @@ class Agent:
                 messages=messages,
                 tools=tool_list if tool_list else None,
                 tool_choice="auto" if tool_list else None,
+                reasoning_effort="low"
             )
 
             model_cost = completion_cost(completion_response=resp)
