@@ -28,6 +28,16 @@ def _team_to_emoji(team: str) -> str:
     return "🟦" if team == "BLUE" else "🟥"
 
 
+# --- Quick counter for total LLM calls made from this script ---
+LLM_CALLS: int = 0
+
+
+def inc_llm_calls(step: str) -> None:
+    global LLM_CALLS  # noqa: PLW0603
+    LLM_CALLS += 1
+    print(f"[LLM] total calls={LLM_CALLS} | step={step}")
+
+
 def format_board_for_spymaster(game: CodenamesGame) -> str:
     """Render the board using engine's visual table (spymaster view)."""
     return str(game.state.board)
@@ -66,6 +76,7 @@ def summarize_round_messages(
     ]
 
     try:
+        inc_llm_calls(step="summarizer_round_messages")
         resp = completion(
             model=model,
             messages=summary_messages,
@@ -130,6 +141,7 @@ def spymaster_turn(
         remaining_words=remaining,
     )
 
+    inc_llm_calls(step=f"{spymaster.name}.run")
     result, assistant_msg, _, _ = spymaster.run(
         user_message=user_msg, message_history=message_history
     )
@@ -211,6 +223,7 @@ def guesser_turn(
                     votes=votes_display,
                 )
 
+                inc_llm_calls(step=f"{agent.name}.run")
                 result, assistant_msg, _, _ = agent.run(
                     user_message=user_msg, message_history=message_history
                 )
@@ -270,7 +283,9 @@ def guesser_turn(
                 if majority:
                     # Create LLM actor representing the team consensus
                     # Use first operative as representative
-                    actor = LLMActor(name=f"{team_turn.name}-team", model=ops[0].model)
+                    actor = LLMActor(
+                        name=f"{_name(team_turn)}-team", model=ops[0].model
+                    )
 
                     if majority == "pass":
                         # Majority agrees to pass
@@ -346,7 +361,7 @@ def guesser_turn(
                         break  # break inner loop to start a new guess cycle within same turn
 
         # Reached here with no majority across all rounds -> pass the turn
-        actor = LLMActor(name=f"{team_turn.name}-team", model=ops[0].model)
+        actor = LLMActor(name=f"{_name(team_turn)}-team", model=ops[0].model)
         try:
             _ = game.pass_turn(actor=actor)
         except Exception as e:  # pylint: disable=broad-except
