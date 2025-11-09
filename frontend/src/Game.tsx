@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { cva } from 'class-variance-authority'
 import { useState, useRef, useEffect } from 'react'
 
-const API_URL = 'http://localhost:8080'
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080'
 
 type GameType = {
   red: {
@@ -17,12 +17,12 @@ type GameType = {
 
 const defaultGameType = {
   red: {
-    spymaster: 'GPT4_1',
-    guesser: 'GPT4_1',
+    spymaster: 'GPT5',
+    guesser: 'GPT5',
   },
   blue: {
-    spymaster: 'GPT4_1',
-    guesser: 'GPT4_1',
+    spymaster: 'GPT5',
+    guesser: 'GPT5',
   },
 } as const
 
@@ -174,7 +174,9 @@ function Game() {
         .catch(() => {
           // ignore
         })
-    } catch (_err) {}
+    } catch (_err) {
+      // ignore
+    }
   }
 
   const createNewGame = useMutation({
@@ -298,7 +300,9 @@ function Game() {
           flipAudioRef.current.currentTime = 0
           void flipAudioRef.current.play()
         }
-      } catch (_err) {}
+      } catch (_err) {
+        // ignore
+      }
 
       // Also play correct/wrong based on latest guess when a flip happens,
       // but chain it to run after the flip sound ends to avoid overlap.
@@ -327,7 +331,9 @@ function Game() {
             try {
               guessAudio.currentTime = 0
               void guessAudio.play()
-            } catch (_err) {}
+            } catch (_err) {
+              // ignore
+            }
           }
           if (flipEl) {
             const onEnded = () => {
@@ -1135,18 +1141,12 @@ const TEAM_NAME_TO_COLOR = {
 // Editable display names for each model/provider
 const MODEL_DISPLAY_NAME: Record<PlayerTypeId | 'HUMAN', string> = {
   HUMAN: 'Human',
-  GPT4_1: 'GPT 4.1',
-  GEMINI: 'Gemini',
   GPT5: 'GPT 5',
   CLAUDE_SONNET: 'Claude',
   GEMINI_2_5_PRO: 'Gemini',
   GROK_4: 'Grok',
   KIMI_K2_THINKING: 'Kimi',
-  ZAI_4_6: 'Z.ai',
-  OPENAI_OSS: 'OpenAI OSS',
-  QWEN_3_235B: 'Qwen',
   DEEPSEEK_V3_2_EXP_THINKING: 'DeepSeek',
-  LLAMA_3_1_405B: 'Llama',
 }
 
 type ChatHistoryProps = {
@@ -1659,11 +1659,8 @@ function HeaderWithLogo({
     switch (preferredType) {
       case 'HUMAN':
         return '/logos/human.svg'
-      case 'GPT4_1':
       case 'GPT5':
-      case 'OPENAI_OSS':
         return '/logos/openai.svg'
-      case 'GEMINI':
       case 'GEMINI_2_5_PRO':
         return '/logos/gemini.png'
       case 'CLAUDE_SONNET':
@@ -1672,12 +1669,6 @@ function HeaderWithLogo({
         return '/logos/grok.png'
       case 'DEEPSEEK_V3_2_EXP_THINKING':
         return '/logos/deepseek.png'
-      case 'QWEN_3_235B':
-        return '/logos/qwen.png'
-      case 'ZAI_4_6':
-        return '/logos/zai.svg'
-      case 'LLAMA_3_1_405B':
-        return '/logos/meta.png'
       case 'KIMI_K2_THINKING':
         return '/logos/kimi.jpg'
       default:
