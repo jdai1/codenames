@@ -231,6 +231,25 @@ function Game() {
           {createNewGame.isPending ? 'Creating...' : 'Start game'}
         </button>
 
+        {gameState && (
+          <div className='flex items-center'>
+            <div className='flex gap-6 items-center justify-center'>
+              <div className='text-lg text-gray-600'>
+                Current Turn: {gameState.current_turn.team} -{' '}
+                {gameState.current_turn.role}
+                {gameState.current_turn.role === 'GUESSER' &&
+                  ` (${gameState.current_turn.left_guesses} guesses left)`}
+              </div>
+              {gameState.is_game_over && gameState.winner && (
+                <div className='text-lg font-bold text-green-600'>
+                  Game Over! Winner: {gameState.winner.team_color} -{' '}
+                  {gameState.winner.reason}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <span className='flex gap-2 items-center'>
           <label htmlFor='spymasterModeToggle'>Spymaster View</label>
           <input
@@ -247,35 +266,6 @@ function Game() {
       {isLoading && (
         <div className='flex items-center justify-center h-full'>
           <div>Loading game...</div>
-        </div>
-      )}
-
-      {gameState && (
-        <div className='p-4 border-b border-gray-300'>
-          <div className='flex gap-6 items-center justify-center'>
-            <div className='text-lg font-bold'>
-              <span className='text-red-600'>
-                Red: {gameState.score.red.revealed}/{gameState.score.red.total}
-              </span>
-              {' | '}
-              <span className='text-blue-600'>
-                Blue: {gameState.score.blue.revealed}/
-                {gameState.score.blue.total}
-              </span>
-            </div>
-            <div className='text-sm text-gray-600'>
-              Current Turn: {gameState.current_turn.team} -{' '}
-              {gameState.current_turn.role}
-              {gameState.current_turn.role === 'GUESSER' &&
-                ` (${gameState.current_turn.left_guesses} guesses left)`}
-            </div>
-            {gameState.is_game_over && gameState.winner && (
-              <div className='text-lg font-bold text-green-600'>
-                Game Over! Winner: {gameState.winner.team_color} -{' '}
-                {gameState.winner.reason}
-              </div>
-            )}
-          </div>
         </div>
       )}
 
