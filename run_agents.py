@@ -2,6 +2,9 @@ import os
 import json
 from collections import Counter, defaultdict
 from typing import List, Dict, Any, Tuple
+from hydra import main as hydra_main
+from omegaconf import DictConfig
+import logging
 
 from litellm import completion
 
@@ -25,6 +28,11 @@ from engine.game.events import (
     OperativeToolType,
 )
 from engine.game.player import PlayerRole
+
+
+# Reduce LiteLLM logging noise
+for _logger_name in ("LiteLLM", "litellm"):
+    logging.getLogger(_logger_name).setLevel(logging.WARNING)
 
 
 def _name(val: Any) -> str:
@@ -629,17 +637,18 @@ def guesser_turn(
 
 
 def main():
-    model = os.environ.get("MODEL", "gpt-4.1")
+    red_model = os.environ.get("RED_MODEL", "gpt-4.1")
+    blue_model = os.environ.get("BLUE_MODEL", "gpt-4.1")
     team_sizes = int(os.environ.get("OPERATIVES_PER_TEAM", "3"))
     seed = int(os.environ.get("SEED", "42"))
 
     game = CodenamesGame(board_size=25, seed=seed)
 
     # Build agents for both teams
-    blue_spy = build_spymaster("blue", model)
-    red_spy = build_spymaster("red", model)
-    blue_ops = build_operatives("blue", model, n=team_sizes)
-    red_ops = build_operatives("red", model, n=team_sizes)
+    blue_spy = build_spymaster("blue", blue_model)
+    red_spy = build_spymaster("red", red_model)
+    blue_ops = build_operatives("blue", blue_model, n=team_sizes)
+    red_ops = build_operatives("red", red_model, n=team_sizes)
 
     # Simple per-team chat history for operatives and spymasters
     # Use normalized team name ("BLUE"/"RED") as keys to avoid enum/string mismatches
@@ -703,7 +712,8 @@ def main():
                     final_token_usage += token_usage
                 pass  # Events are already printed in guesser_turn
             round_messages = operative_histories[team_key][history_before:]
-            summary = summarize_round_messages(round_messages, model=model)
+            # HARDCODE TO USE GPT 4.1 FOR SUMMARIZER
+            summary = summarize_round_messages(round_messages, model="gpt-4.1")
             if summary:
                 spymaster_histories[team_key].append(
                     {
@@ -711,8 +721,6 @@ def main():
                         "content": f"OPERATIVE SUMMARY: {summary}",
                     }
                 )
-
-        breakpoint()
 
         # Print a light summary of board progress
         s = game.get_state(show_colors=False)
@@ -731,5 +739,17 @@ def main():
     print(json.dumps(final.dict(), indent=2, default=str))
 
 
-if __name__ == "__main__":
+@hydra_main(
+    version_base="1.1", config_path="configs/model", config_name="claude-sonnet"
+)
+def hydra_main(cfg: DictConfig) -> None:
+    # Pass config to existing main via environment variables
+    os.environ["RED_MODEL"] = str(cfg.teams.red_model)
+    os.environ["BLUE_MODEL"] = str(cfg.teams.blue_model)
+    os.environ["SEED"] = str(cfg.seed)
+    os.environ["OPERATIVES_PER_TEAM"] = str(cfg.operatives_per_team)
     main()
+
+
+if __name__ == "__main__":
+    hydra_main()
