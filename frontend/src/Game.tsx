@@ -877,8 +877,8 @@ function Game() {
       )}
 
       {gameState && (
-        <div className='grid grid-cols-5 h-full'>
-          <div className='col-span-1 bg-gray-100'>
+        <div className='grid grid-cols-5 h-full grow'>
+          <div className='col-span-1 bg-gray-100 overflow-scroll'>
             <ChatHistory
               team='RED'
               gameState={gameState}
@@ -888,13 +888,8 @@ function Game() {
               aiLoading={aiLoading}
             />
           </div>
-          <div className='col-span-3 bg-gray-200 p-4'>
-            <div
-              className='grid gap-2'
-              style={{
-                gridTemplateColumns: `repeat(${gridCols}, 1fr)`,
-              }}
-            >
+          <div className='col-span-3 bg-gray-200 p-4 overflow-scroll'>
+            <div className='grid gap-2 grid-cols-5 grid-rows-5 h-full'>
               {gameState.board.map((card) => {
                 const isGuesserTurn = gameState.current_turn.role === 'GUESSER'
                 const currentTeam = gameState.current_turn.team
@@ -923,7 +918,7 @@ function Game() {
               })}
             </div>
           </div>
-          <div className='col-span-1 bg-gray-100'>
+          <div className='col-span-1 bg-gray-100 overflow-scroll'>
             <ChatHistory
               team='BLUE'
               gameState={gameState}
@@ -1271,7 +1266,16 @@ type CardProps = {
 
 function Card({ label, type, onClick, clickable, revealed }: CardProps) {
   const card = cva(
-    ['bold', 'border', 'border-gray-300', 'px-4 py-8', 'text-center'],
+    [
+      'bold',
+      'border',
+      'border-gray-300',
+      'px-4',
+      'text-center',
+      'flex',
+      'items-center',
+      'justify-center',
+    ],
     {
       variants: {
         type: {
@@ -1287,7 +1291,7 @@ function Card({ label, type, onClick, clickable, revealed }: CardProps) {
 
   const baseClasses = card({ type })
   const clickableClasses = clickable
-    ? 'cursor-pointer hover:opacity-80 hover:shadow-md transition-all'
+    ? 'cursor-pointer hover:opacity-80 hover:shadow-xl hover:bg-white transition-all'
     : ''
   const disabledClasses = revealed ? 'opacity-60 cursor-not-allowed' : ''
 

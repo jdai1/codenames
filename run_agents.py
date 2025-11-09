@@ -141,6 +141,11 @@ def spymaster_turn(
     opponent_emoji = _team_to_emoji("RED") if team == "BLUE" else _team_to_emoji("BLUE")
     remaining = remaining_words_for_team(state, team)
     board_words = set(game.state.board.all_words)
+    # Collect previously used hint words (canonicalized)
+    used_hint_words = {
+        getattr(h, "formatted_word", canonical_format(getattr(h, "word", "")))
+        for h in game.state.given_hints
+    }
 
     total_model_cost = 0
     total_token_usage = 0
@@ -204,6 +209,18 @@ def spymaster_turn(
                     "content": (
                         f"system: hint rejected for {clue.upper()}: "
                         "clue cannot be a card on the board. Choose another word."
+                    ),
+                }
+            )
+            continue
+        # Prevent reusing the same hint in a future round
+        if canonical_format(clue) in used_hint_words:
+            message_history.append(
+                {
+                    "role": "user",
+                    "content": (
+                        f"system: hint rejected for {clue.upper()}: "
+                        "clue was already used in a previous round. Choose another word."
                     ),
                 }
             )
