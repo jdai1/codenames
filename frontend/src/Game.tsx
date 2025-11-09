@@ -17,12 +17,12 @@ type GameType = {
 
 const defaultGameType = {
   red: {
-    spymaster: 'GPT5',
-    guesser: 'GPT5',
+    spymaster: 'GPT4_1',
+    guesser: 'GPT4_1',
   },
   blue: {
-    spymaster: 'GPT5',
-    guesser: 'GPT5',
+    spymaster: 'GPT4_1',
+    guesser: 'GPT4_1',
   },
 } as const
 
@@ -229,9 +229,9 @@ function Game() {
 
   // Map player type to model name
   const getModelName = (playerType: PlayerTypeId): string => {
-    if (playerType === 'GPT5') return 'gpt-4'
+    if (playerType === 'GPT4_1') return 'gpt-4.1'
     if (playerType === 'GEMINI') return 'gemini'
-    return 'gpt-4' // default
+    return 'gpt-4.1' // default
   }
 
   // Track if we've already triggered AI action for current turn to prevent duplicate calls
@@ -1172,6 +1172,32 @@ function ChatHistory({
                   {event.actor.name}: {event.message}
                 </div>
               )
+            } else if (
+              event.event_type === 'operative_action' &&
+              event.tool === 'vote_guess' &&
+              event.message
+            ) {
+              return (
+                <div
+                  key={`event-${idx}`}
+                  className='p-2 rounded bg-yellow-50 text-sm italic'
+                >
+                  {event.actor.name} voted: {event.message}
+                </div>
+              )
+            } else if (
+              event.event_type === 'operative_action' &&
+              event.tool === 'vote_pass' &&
+              event.message
+            ) {
+              return (
+                <div
+                  key={`event-${idx}`}
+                  className='p-2 rounded bg-green-50 text-sm italic'
+                >
+                  {event.actor.name} voted to pass: {event.message}
+                </div>
+              )
             }
             return null
           })}
@@ -1305,7 +1331,7 @@ function Card({ label, type, onClick, clickable, revealed }: CardProps) {
   )
 }
 
-type PlayerTypeId = 'HUMAN' | 'GPT5' | 'GEMINI'
+type PlayerTypeId = 'HUMAN' | 'GPT4_1' | 'GEMINI'
 type PlayerType = {
   label: string
   isAI: boolean
@@ -1313,7 +1339,7 @@ type PlayerType = {
 
 const playerTypes: Record<PlayerTypeId, PlayerType> = {
   HUMAN: { label: 'Human', isAI: false },
-  GPT5: { label: 'GPT-5', isAI: true },
+  GPT4_1: { label: 'GPT-5', isAI: true },
   GEMINI: { label: 'Gemini', isAI: true },
 }
 
