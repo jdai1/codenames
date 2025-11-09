@@ -165,9 +165,10 @@ def spymaster_turn(
         board=board_str,
         remaining_words=remaining,
     )
-
+    print("Spymaster turn")
     max_attempts = max(1, spymaster.max_iterations)
     for _ in range(max_attempts):
+        print("Start forloop")
         inc_llm_calls(step=f"{spymaster.name}.run")
         result, assistant_msg, model_cost, token_usage = spymaster.run(
             user_message=user_msg, message_history=message_history
@@ -254,6 +255,7 @@ def spymaster_turn(
         actor = LLMActor(name=spymaster.name, model=spymaster.model)
 
         try:
+            print("Give hint")
             hint_res = game.give_hint(word=clue, card_amount=qty, actor=actor)
         except Exception as e:  # pylint: disable=broad-except
             return (

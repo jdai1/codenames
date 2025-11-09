@@ -129,14 +129,17 @@ class Agent:
             }
             if _supports_reasoning_effort(self.model):
                 completion_kwargs["reasoning_effort"] = "low"
-
+            if self.model == "grok-4-fast-reasoning":
+                completion_kwargs["reasoning_effort"] = "low"
             # Retry logic: retry all errors with exponential backoff (1s, 3s, 10s)
             max_retries = 3
             backoff_delays = [1, 3, 10]  # seconds for each retry attempt
             resp = None
             for attempt in range(max_retries):
                 try:
+                    print("Start request")
                     resp = completion(**completion_kwargs)
+                    print("resp", resp)
                     break
                 except Exception as e:
                     error_str = str(e).lower()

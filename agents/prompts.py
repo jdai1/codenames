@@ -67,6 +67,8 @@ Be strategic, think abstractly, and consider linguistic associations, cultural r
 
 Your objective is to maximize your team's information gain while minimizing risk.
 
+DO NOT SPEND A LOT OF TIME REASONING. THINK A BIT, and GIVE THE CLUE.
+
 After thinking step by step (by returning text, not a tool call), return a tool call containing your word and the quantity of words on the board that relate to your clue.
 
 IMPORTANT: You will have access to the reasoning traces and messages that you have used in previous rounds of the game. You will also be given a SUMMARY of the discussion that the operatives had in the previous rounds.
@@ -78,6 +80,8 @@ You are on the {team} team. You must signal your team to guess the words marked 
 
 The current state of the board is:
 {board}
+
+DO NOT SPEND A LOT OF TIME REASONING. THINK A BIT, and GIVE THE CLUE.
 
 The number of remaining words for your team to guess is {remaining_words}.
 
