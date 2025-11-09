@@ -1,0 +1,26 @@
+{
+  "models": {
+    "BLUE": "deepseek/deepseek-reasoner",
+    "RED": "gpt-5"
+  },
+  "winner": "RED",
+  "lost_to_assassin": false,
+  "hints": {
+    "BLUE": 4,
+    "RED": 4
+  },
+  "correct_guesses": {
+    "BLUE": 7,
+    "RED": 8
+  },
+  "cost": {
+    "BLUE": 0.02458863,
+    "RED": 0.28953450000000003,
+    "total": 0.31412313000000003
+  },
+  "tokens": {
+    "BLUE": 118529,
+    "RED": 99848,
+    "total": 218377
+  }
+}

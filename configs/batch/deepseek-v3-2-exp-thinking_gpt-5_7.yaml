@@ -1,0 +1,6 @@
+teams:
+  blue_model: "deepseek/deepseek-reasoner"
+  red_model: "gpt-5"
+seed: 231284486
+operatives_per_team: 3
+output_file: "logs/deepseek-v3-2-exp-thinking_gpt-5_7.json"

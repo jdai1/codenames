@@ -1,0 +1,6 @@
+teams:
+  blue_model: "claude-sonnet-4-5-20250929"
+  red_model: "deepseek/deepseek-reasoner"
+seed: 112449972
+operatives_per_team: 3
+output_file: "logs/claude-sonnet_deepseek-v3-2-exp-thinking_1.json"

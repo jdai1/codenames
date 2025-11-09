@@ -1,0 +1,26 @@
+{
+  "models": {
+    "BLUE": "gpt-5",
+    "RED": "moonshot/kimi-k2-thinking"
+  },
+  "winner": "RED",
+  "lost_to_assassin": true,
+  "hints": {
+    "BLUE": 1,
+    "RED": 0
+  },
+  "correct_guesses": {
+    "BLUE": 2,
+    "RED": 0
+  },
+  "cost": {
+    "BLUE": 0.04534125000000001,
+    "RED": 0.0,
+    "total": 0.04534125000000001
+  },
+  "tokens": {
+    "BLUE": 13322,
+    "RED": 0,
+    "total": 13322
+  }
+}

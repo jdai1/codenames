@@ -12,23 +12,27 @@ from engine.game.player import PlayerRole
 
 class ActorType(str, Enum):
     """Type of actor performing the action."""
+
     USER = "user"
     LLM = "llm"
 
 
 class Actor(BaseModel):
     """Base class for actors (user or LLM)."""
+
     actor_type: ActorType
     name: str
 
 
 class UserActor(Actor):
     """Represents a human user."""
+
     actor_type: ActorType = ActorType.USER
 
 
 class LLMActor(Actor):
     """Represents an LLM agent."""
+
     actor_type: ActorType = ActorType.LLM
     model: str  # e.g., "gpt-4", "claude-3-opus", etc.
 
@@ -38,6 +42,7 @@ class LLMActor(Actor):
 
 class EventType(str, Enum):
     """Types of events that can occur in the game."""
+
     HINT_GIVEN = "hint_given"
     GUESS_MADE = "guess_made"
     TURN_PASSED = "turn_passed"
@@ -48,6 +53,7 @@ class EventType(str, Enum):
 
 class OperativeToolType(str, Enum):
     """Types of tools an operative can use."""
+
     VOTE_GUESS = "vote_guess"
     VOTE_PASS = "vote_pass"
     TALK = "talk"
@@ -55,6 +61,7 @@ class OperativeToolType(str, Enum):
 
 class GameEvent(BaseModel):
     """Base event that tracks any action in the game."""
+
     event_type: EventType
     team_color: TeamColor
     player_role: PlayerRole
@@ -62,28 +69,34 @@ class GameEvent(BaseModel):
     timestamp: datetime = None
 
     def __init__(self, **data):
-        if 'timestamp' not in data or data['timestamp'] is None:
-            data['timestamp'] = datetime.now()
+        if "timestamp" not in data or data["timestamp"] is None:
+            data["timestamp"] = datetime.now()
         super().__init__(**data)
 
 
 class HintEvent(GameEvent):
     """Event for when a hint is given."""
+
     event_type: EventType = EventType.HINT_GIVEN
     hint: GivenHint
 
     def __str__(self) -> str:
-        actor_str = str(self.actor) if isinstance(self.actor, LLMActor) else self.actor.name
+        actor_str = (
+            str(self.actor) if isinstance(self.actor, LLMActor) else self.actor.name
+        )
         return f"[{self.team_color.value}] {actor_str} Hint: {self.hint}"
 
 
 class GuessEvent(GameEvent):
     """Event for when a guess is made."""
+
     event_type: EventType = EventType.GUESS_MADE
     guess: GivenGuess
 
     def __str__(self) -> str:
-        actor_str = str(self.actor) if isinstance(self.actor, LLMActor) else self.actor.name
+        actor_str = (
+            str(self.actor) if isinstance(self.actor, LLMActor) else self.actor.name
+        )
         return f"[{self.team_color.value}] {actor_str} Guess: {self.guess}"
 
     @property
@@ -99,48 +112,66 @@ class GuessEvent(GameEvent):
 
 class PassEvent(GameEvent):
     """Event for when a team passes their turn."""
+
     event_type: EventType = EventType.TURN_PASSED
 
     def __str__(self) -> str:
-        actor_str = str(self.actor) if isinstance(self.actor, LLMActor) else self.actor.name
+        actor_str = (
+            str(self.actor) if isinstance(self.actor, LLMActor) else self.actor.name
+        )
         return f"[{self.team_color.value}] {actor_str} Passed turn"
 
 
 class ChatEvent(GameEvent):
     """Event for LLM agent chat messages."""
+
     event_type: EventType = EventType.CHAT_MESSAGE
     message: str
     message_metadata: Optional[Dict] = None  # Can store reasoning, tool calls, etc.
 
     def __str__(self) -> str:
-        actor_str = str(self.actor) if isinstance(self.actor, LLMActor) else self.actor.name
+        actor_str = (
+            str(self.actor) if isinstance(self.actor, LLMActor) else self.actor.name
+        )
         return f"[{self.team_color.value}] {actor_str} ({self.player_role.value}): {self.message}"
 
 
 class OperativeEvent(GameEvent):
     """Event for operative tool usage (for LLM interpretability)."""
+
     event_type: EventType = EventType.OPERATIVE_ACTION
     tool: OperativeToolType
-    message: Optional[str] = None  # Word for vote_guess, reason for vote_pass, discussion for talk
+    message: Optional[str] = (
+        None  # Word for vote_guess, reason for vote_pass, discussion for talk
+    )
 
     def __str__(self) -> str:
-        actor_str = str(self.actor) if isinstance(self.actor, LLMActor) else self.actor.name
+        actor_str = (
+            str(self.actor) if isinstance(self.actor, LLMActor) else self.actor.name
+        )
         if self.tool == OperativeToolType.TALK:
             return f"[{self.team_color.value}] {actor_str} talks: {self.message}"
         elif self.tool == OperativeToolType.VOTE_GUESS:
-            return f"[{self.team_color.value}] {actor_str} votes to guess: {self.message}"
+            return (
+                f"[{self.team_color.value}] {actor_str} votes to guess: {self.message}"
+            )
         elif self.tool == OperativeToolType.VOTE_PASS:
             return f"[{self.team_color.value}] {actor_str} votes to pass"
-        return f"[{self.team_color.value}] {actor_str} operative action: {self.tool.value}"
+        return (
+            f"[{self.team_color.value}] {actor_str} operative action: {self.tool.value}"
+        )
 
 
 class SpymasterEvent(GameEvent):
     """Event for spymaster reasoning (for LLM interpretability)."""
+
     event_type: EventType = EventType.SPYMASTER_ACTION
     reasoning: Optional[str] = None
 
     def __str__(self) -> str:
-        actor_str = str(self.actor) if isinstance(self.actor, LLMActor) else self.actor.name
+        actor_str = (
+            str(self.actor) if isinstance(self.actor, LLMActor) else self.actor.name
+        )
         if self.reasoning:
             return f"[{self.team_color.value}] {actor_str} reasons: {self.reasoning}"
         return f"[{self.team_color.value}] {actor_str} spymaster action"
@@ -148,6 +179,7 @@ class SpymasterEvent(GameEvent):
 
 class TeamHistory(BaseModel):
     """Tracks all events for a specific team."""
+
     team_color: TeamColor
     all_events: List[GameEvent] = []
 
@@ -186,15 +218,16 @@ class TeamHistory(BaseModel):
 
 class GameHistory(BaseModel):
     """Tracks complete game history across all teams."""
+
     blue_team: TeamHistory
     red_team: TeamHistory
     global_events: List[GameEvent] = []
 
     def __init__(self, **data):
-        if 'blue_team' not in data:
-            data['blue_team'] = TeamHistory(team_color=TeamColor.BLUE)
-        if 'red_team' not in data:
-            data['red_team'] = TeamHistory(team_color=TeamColor.RED)
+        if "blue_team" not in data:
+            data["blue_team"] = TeamHistory(team_color=TeamColor.BLUE)
+        if "red_team" not in data:
+            data["red_team"] = TeamHistory(team_color=TeamColor.RED)
         super().__init__(**data)
 
     def get_team_history(self, team_color: TeamColor) -> TeamHistory:

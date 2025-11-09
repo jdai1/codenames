@@ -1,0 +1,26 @@
+{
+  "models": {
+    "BLUE": "deepseek/deepseek-reasoner",
+    "RED": "xai/grok-4-fast-reasoning"
+  },
+  "winner": "RED",
+  "lost_to_assassin": false,
+  "hints": {
+    "BLUE": 3,
+    "RED": 3
+  },
+  "correct_guesses": {
+    "BLUE": 7,
+    "RED": 8
+  },
+  "cost": {
+    "BLUE": 0.01955795,
+    "RED": 0.0237,
+    "total": 0.043257949999999996
+  },
+  "tokens": {
+    "BLUE": 98961,
+    "RED": 38176,
+    "total": 137137
+  }
+}

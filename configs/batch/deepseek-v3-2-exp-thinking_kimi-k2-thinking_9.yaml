@@ -1,0 +1,6 @@
+teams:
+  blue_model: "deepseek/deepseek-reasoner"
+  red_model: "moonshot/kimi-k2-thinking"
+seed: 1935309850
+operatives_per_team: 3
+output_file: "logs/deepseek-v3-2-exp-thinking_kimi-k2-thinking_9.json"

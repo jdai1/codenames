@@ -1,0 +1,26 @@
+{
+  "models": {
+    "BLUE": "claude-sonnet-4-5-20250929",
+    "RED": "xai/grok-4-fast-reasoning"
+  },
+  "winner": "BLUE",
+  "lost_to_assassin": false,
+  "hints": {
+    "BLUE": 3,
+    "RED": 3
+  },
+  "correct_guesses": {
+    "BLUE": 8,
+    "RED": 6
+  },
+  "cost": {
+    "BLUE": 0.52836,
+    "RED": 0.030397300000000002,
+    "total": 0.5587573
+  },
+  "tokens": {
+    "BLUE": 67987,
+    "RED": 54837,
+    "total": 122824
+  }
+}

@@ -11,4 +11,5 @@ dependencies = [
     "hydra-core>=1.3.2",
     "litellm>=1.74.1",
     "pydantic>=2.12.4",
+    "trueskill>=0.4.5",
 ]
