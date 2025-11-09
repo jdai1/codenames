@@ -143,6 +143,53 @@ function Game() {
     }
   }, [])
 
+  // Sound effects: refs and initialization
+  const flipAudioRef = useRef<HTMLAudioElement | null>(null)
+  const guessRightAudioRef = useRef<HTMLAudioElement | null>(null)
+  const guessWrongAudioRef = useRef<HTMLAudioElement | null>(null)
+  const prevRevealedCountRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    flipAudioRef.current = new Audio('/sfx/card_flip.mp3')
+    guessRightAudioRef.current = new Audio('/sfx/guess_right.mp3')
+    guessWrongAudioRef.current = new Audio('/sfx/guess_wrong.mp3')
+  }, [])
+
+  // Press 'p' to play a test flip sound
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === 'p') {
+        try {
+          if (flipAudioRef.current) {
+            flipAudioRef.current.currentTime = 0
+            void flipAudioRef.current.play()
+          }
+        } catch (_err) {}
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  // Attempt to unlock audio within a direct user gesture
+  const unlockAudio = () => {
+    // Use a temporary, muted element to satisfy gesture policy without touching our main refs
+    try {
+      const temp = new Audio('/sfx/card_flip.mp3')
+      temp.muted = true
+      temp.volume = 0
+      temp.play().then(() => {
+        // stop shortly after
+        setTimeout(() => {
+          temp.pause()
+          temp.currentTime = 0
+        }, 50)
+      }).catch(() => {
+        // ignore
+      })
+    } catch (_err) {}
+  }
+
   const createNewGame = useMutation({
     mutationFn: async () => {
       const response = await fetch(new URL('/games', API_URL), {
@@ -242,6 +289,73 @@ function Game() {
 
   // Use the appropriate game state based on spymasterView
   const gameState = spymasterView ? gameStateFull : gameStateOperative
+
+  // Helpers for SFX tracking
+  const getRevealedCount = (gs?: GameState | null) =>
+    gs?.board?.reduce((sum, c) => sum + (c.revealed ? 1 : 0), 0) ?? 0
+
+  // Play flip SFX when revealed card count increases
+  useEffect(() => {
+    if (!gameState) return
+    const current = getRevealedCount(gameState)
+    if (prevRevealedCountRef.current === null) {
+      // First run: capture baseline and do not play
+      prevRevealedCountRef.current = current
+      return
+    }
+    // Simpler: play whenever the revealed count changes
+    if (current !== prevRevealedCountRef.current) {
+      // One or more cards flipped; play flip sound once
+      try {
+        if (flipAudioRef.current) {
+          flipAudioRef.current.currentTime = 0
+          void flipAudioRef.current.play()
+        }
+      } catch (_err) {}
+
+      // Also play correct/wrong based on latest guess when a flip happens,
+      // but chain it to run after the flip sound ends to avoid overlap.
+      const red = gameState?.event_history?.red_team ?? []
+      const blue = gameState?.event_history?.blue_team ?? []
+      const guessEvents = [...red, ...blue].filter(
+        (e) => e.event_type === 'guess_made'
+      )
+      if (guessEvents.length > 0) {
+        const latest = guessEvents.reduce((latestSoFar, ev) => {
+          if (!latestSoFar) return ev
+          const tA = Date.parse(ev.timestamp)
+          const tB = Date.parse(latestSoFar.timestamp)
+          return tA > tB ? ev : latestSoFar
+        }, null as GameEvent | null)
+        const wasCorrect =
+          (latest?.correct as boolean | undefined) ??
+          (latest?.guess?.correct as boolean | undefined) ??
+          false
+        const guessAudio = wasCorrect
+          ? guessRightAudioRef.current
+          : guessWrongAudioRef.current
+        const flipEl = flipAudioRef.current
+        if (guessAudio) {
+          const playGuess = () => {
+            try {
+              guessAudio.currentTime = 0
+              void guessAudio.play()
+            } catch (_err) {}
+          }
+          if (flipEl) {
+            const onEnded = () => {
+              flipEl.removeEventListener('ended', onEnded)
+              playGuess()
+            }
+            flipEl.addEventListener('ended', onEnded, { once: true } as AddEventListenerOptions)
+          } else {
+            playGuess()
+          }
+        }
+      }
+    }
+    prevRevealedCountRef.current = current
+  }, [gameState?.board]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Map player type to model name
   const getModelName = (playerType: PlayerTypeId): string => {
@@ -806,6 +920,7 @@ function Game() {
           <button
             className='rounded bg-amber-400 hover:bg-amber-500 transition-colors px-4 py-1.5 text-sm font-medium'
             onClick={() => {
+              unlockAudio()
               createNewGame.mutate()
             }}
             disabled={createNewGame.isPending}
