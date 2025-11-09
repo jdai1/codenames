@@ -87,9 +87,8 @@ def get_game_state(game_id: str):
 
     game = games[game_id]
     show_colors = request.args.get("show_colors", "false").lower() == "true"
-    include_history = request.args.get("include_history", "false").lower() == "true"
 
-    state = game.get_state(show_colors=show_colors, include_history=include_history)
+    state = game.get_state(show_colors=show_colors, include_history=True)
     return jsonify(state.dict())
 
 
