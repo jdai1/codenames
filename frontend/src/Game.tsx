@@ -243,10 +243,6 @@ function Game() {
     action: 'hint' | 'guess'
   } | null>(null)
 
-  useEffect(() => {
-    console.log('gameState', gameState)
-  }, [gameState])
-
   // Auto-trigger AI actions when it's an AI's turn
   useEffect(() => {
     if (!gameState || !gameId || gameState.is_game_over) {
@@ -826,13 +822,13 @@ function Game() {
             </div>
           </div>
           <button
-            className='rounded bg-amber-400 p-2 px-4 self-start'
+            className='rounded border border-gray-300 p-2 px-4 self-start'
             onClick={() => {
               createNewGame.mutate()
             }}
             disabled={createNewGame.isPending}
           >
-            {createNewGame.isPending ? 'Creating...' : 'Start game'}
+            {createNewGame.isPending ? 'Creating...' : 'Start new game'}
           </button>
         </div>
 
@@ -931,7 +927,7 @@ function Game() {
 
       {!gameState && !isLoading && (
         <div className='flex items-center justify-center h-full'>
-          <div>Click "Start game" to begin</div>
+          <div>Click "Start new game" to begin</div>
         </div>
       )}
     </div>
@@ -968,6 +964,8 @@ function ChatHistory({
   const [hint, setHint] = useState('')
   const [hintCount, setHintCount] = useState('')
   const hintInputRef = useRef<HTMLInputElement>(null)
+  const chatHistoryRef = useRef<HTMLDivElement>(null)
+  const wasScrolledToBottomRef = useRef<boolean>(true)
   const queryClient = useQueryClient()
   const [expandedTalkEvents, setExpandedTalkEvents] = useState<Set<number>>(
     new Set()
@@ -1108,13 +1106,59 @@ function ChatHistory({
     }
   }, [shouldEnableHintInput])
 
+  // Track scroll position continuously
+  useEffect(() => {
+    const container = chatHistoryRef.current
+    if (!container) return
+
+    const handleScroll = () => {
+      const isScrolledToBottom =
+        container.scrollHeight - container.scrollTop <=
+        container.clientHeight + 10 // 10px threshold for rounding
+      wasScrolledToBottomRef.current = isScrolledToBottom
+    }
+
+    container.addEventListener('scroll', handleScroll)
+    // Also check initial state
+    handleScroll()
+
+    return () => {
+      container.removeEventListener('scroll', handleScroll)
+    }
+  }, [])
+
+  // Auto-scroll chat history to bottom when new messages are added
+  useEffect(() => {
+    if (!chatHistoryRef.current || !gameState.event_history) return
+
+    // Check if scrolled to bottom BEFORE the update (using the ref we stored)
+    const shouldScrollToBottom = wasScrolledToBottomRef.current
+
+    // Use requestAnimationFrame to ensure DOM has updated after React render
+    requestAnimationFrame(() => {
+      if (shouldScrollToBottom && chatHistoryRef.current) {
+        chatHistoryRef.current.scrollTop = chatHistoryRef.current.scrollHeight
+        // Update ref after scrolling to reflect new state
+        wasScrolledToBottomRef.current = true
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    gameState.event_history?.red_team?.length,
+    gameState.event_history?.blue_team?.length,
+    team,
+  ])
+
   return (
     <div className='p-4 flex flex-col h-full gap-4'>
       <h2 className={`text-lg font-bold ${TEAM_NAME_TO_COLOR[team]}`}>
         Team {TEAM_NAME_TO_LABEL[team]} {score.revealed}/{score.total}
       </h2>
 
-      <div className='border border-gray-300 p-2 grow h-full flex flex-col gap-2 overflow-y-auto'>
+      <div
+        ref={chatHistoryRef}
+        className='border border-gray-300 p-2 grow h-full flex flex-col gap-2 overflow-y-auto'
+      >
         {gameState.event_history &&
           (team === 'RED'
             ? gameState.event_history.red_team
