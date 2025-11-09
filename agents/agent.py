@@ -173,7 +173,7 @@ if __name__ == "__main__":
         name="TestOperative",
         system_prompt="",
         role="operative",
-        model="gpt-4o-mini",
+        model="gpt-4.1",
         max_iterations=10,
     )
 
