@@ -231,7 +231,16 @@ function Game() {
   const getModelName = (playerType: PlayerTypeId): string => {
     if (playerType === 'GPT4_1') return 'gpt-4.1'
     if (playerType === 'GEMINI') return 'gemini'
-    return 'gpt-4.1' // default
+    if (playerType === 'GPT5') return 'gpt-5'
+    if (playerType === 'CLAUDE_SONNET') return 'claude-sonnet'
+    if (playerType === 'GEMINI_2_5_PRO') return 'gemini/gemini-2.5-pro'
+    if (playerType === 'GROK_4') return 'grok-4'
+    if (playerType === 'KIMI_K2_THINKING') return 'kimi-k2-thinking'
+    if (playerType === 'ZAI_4_6') return 'zai-4.6'
+    if (playerType === 'OPENAI_OSS') return 'openai oss'
+    if (playerType === 'QWEN_3_235B') return 'qwen 3 235b'
+    if (playerType === 'DEEPSEEK_V3_2_EXP_THINKING') return 'deepseek v3.2-exp-thinking'
+    if (playerType === 'LLAMA_3_1_405B') return 'llama 3.1 405b'
     return 'gpt-4.1' // default
   }
 
@@ -1156,9 +1165,11 @@ function ChatHistory({
 
   return (
     <div className='p-4 flex flex-col h-full gap-4'>
-      <h2 className={`text-lg font-bold ${TEAM_NAME_TO_COLOR[team]}`}>
-        Team {TEAM_NAME_TO_LABEL[team]} {score.revealed}/{score.total}
-      </h2>
+      <HeaderWithLogo
+        team={team}
+        gameType={gameType}
+        scoreText={`${score.revealed}/${score.total}`}
+      />
 
       <div
         ref={chatHistoryRef}
@@ -1362,6 +1373,69 @@ function ChatHistory({
   )
 }
 
+function HeaderWithLogo({
+  team,
+  gameType,
+  scoreText,
+}: {
+  team: 'RED' | 'BLUE'
+  gameType: { spymaster: PlayerTypeId; guesser: PlayerTypeId }
+  scoreText: string
+}) {
+  // Prefer showing an AI logo; fall back to human if both are human
+  const preferredType =
+    gameType.spymaster !== 'HUMAN'
+      ? gameType.spymaster
+      : gameType.guesser !== 'HUMAN'
+      ? gameType.guesser
+      : 'HUMAN'
+
+  const logoSrc = (() => {
+    switch (preferredType) {
+      case 'HUMAN':
+        return '/logos/human.svg'
+      case 'GPT4_1':
+      case 'GPT5':
+      case 'OPENAI_OSS':
+        return '/logos/openai.svg'
+      case 'GEMINI':
+      case 'GEMINI_2_5_PRO':
+        return '/logos/gemini.png'
+      case 'CLAUDE_SONNET':
+        return '/logos/claude.png'
+      case 'GROK_4':
+        return '/logos/grok.png'
+      case 'DEEPSEEK_V3_2_EXP_THINKING':
+        return '/logos/deepseek.png'
+      case 'QWEN_3_235B':
+        return '/logos/qwen.png'
+      case 'ZAI_4_6':
+        return '/logos/zai.svg'
+      case 'LLAMA_3_1_405B':
+        return '/logos/meta.png'
+      case 'KIMI_K2_THINKING':
+        return '/logos/kimi.jpg'
+      default:
+        return ''
+    }
+  })()
+
+  return (
+    <h2 className={`text-lg font-bold ${TEAM_NAME_TO_COLOR[team]} flex items-center gap-2`}>
+      {logoSrc ? (
+        <img
+          src={logoSrc}
+          alt='model logo'
+          className='w-5 h-5 object-contain rounded-sm'
+        />
+      ) : null}
+      <span>
+        Team {TEAM_NAME_TO_LABEL[team]} {scoreText}
+      </span>
+    </h2>
+  )
+}
+
 type CardProps = {
   label: string
   type: 'UNKNOWN' | 'NEUTRAL' | 'RED' | 'BLUE' | 'ASSASSIN'
@@ -1454,7 +1528,20 @@ function Card({
   )
 }
 
-type PlayerTypeId = 'HUMAN' | 'GPT4_1' | 'GEMINI'
+type PlayerTypeId =
+  | 'HUMAN'
+  | 'GPT4_1'
+  | 'GEMINI'
+  | 'GPT5'
+  | 'CLAUDE_SONNET'
+  | 'GEMINI_2_5_PRO'
+  | 'GROK_4'
+  | 'KIMI_K2_THINKING'
+  | 'ZAI_4_6'
+  | 'OPENAI_OSS'
+  | 'QWEN_3_235B'
+  | 'DEEPSEEK_V3_2_EXP_THINKING'
+  | 'LLAMA_3_1_405B'
 type PlayerType = {
   label: string
   isAI: boolean
@@ -1464,6 +1551,16 @@ const playerTypes: Record<PlayerTypeId, PlayerType> = {
   HUMAN: { label: 'Human', isAI: false },
   GPT4_1: { label: 'GPT 4.1', isAI: true },
   GEMINI: { label: 'Gemini', isAI: true },
+  GPT5: { label: 'GPT-5', isAI: true },
+  CLAUDE_SONNET: { label: 'Claude Sonnet', isAI: true },
+  GEMINI_2_5_PRO: { label: 'Gemini 2.5 Pro', isAI: true },
+  GROK_4: { label: 'Grok-4', isAI: true },
+  KIMI_K2_THINKING: { label: 'Kimi K2 Thinking', isAI: true },
+  ZAI_4_6: { label: 'Zai 4.6', isAI: true },
+  OPENAI_OSS: { label: 'OpenAI OSS', isAI: true },
+  QWEN_3_235B: { label: 'Qwen 3 235B', isAI: true },
+  DEEPSEEK_V3_2_EXP_THINKING: { label: 'DeepSeek v3.2 (Thinking)', isAI: true },
+  LLAMA_3_1_405B: { label: 'Llama 3.1 405B', isAI: true },
 }
 
 function PlayerTypeSelect({

@@ -1,5 +1,6 @@
 MODEL_STRINGS = {
     "gpt-5": ["gpt-5", True],
+    "gpt-4.1": ["gpt-4.1", False],
     "claude-sonnet": ["claude-sonnet-4-5-20250929", True],
     "gemini/gemini-2.5-pro": ["gemini/gemini-pro", True],
     "grok-4": ["xai/grok-4-fast-reasoning", True],
