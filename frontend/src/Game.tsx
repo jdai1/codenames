@@ -668,10 +668,63 @@ function ChatHistory({
     },
   })
 
+  const passTurnMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(new URL(`/games/${gameId}/pass`, API_URL), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to pass turn')
+      }
+      return response.json()
+    },
+    onSuccess: async () => {
+      // Refetch game state after passing
+      const operativeResponse = await fetch(
+        new URL(
+          `/games/${gameId}?show_colors=false&include_history=true`,
+          API_URL
+        ),
+        {
+          method: 'GET',
+        }
+      )
+      if (operativeResponse.ok) {
+        const operativeState = await operativeResponse.json()
+        queryClient.setQueryData(['gameState', gameId], operativeState)
+      }
+
+      const fullResponse = await fetch(
+        new URL(
+          `/games/${gameId}?show_colors=true&include_history=true`,
+          API_URL
+        ),
+        {
+          method: 'GET',
+        }
+      )
+      if (fullResponse.ok) {
+        const fullState = await fullResponse.json()
+        queryClient.setQueryData(['gameStateFull', gameId], fullState)
+      }
+    },
+    onError: (error: Error) => {
+      console.error('Pass turn error:', error)
+    },
+  })
+
   const handleSubmitHint = () => {
     const count = parseInt(hintCount)
     if (!hint || !count || count < 1) return
     giveHintMutation.mutate({ word: hint, card_amount: count })
+  }
+
+  const handlePassTurn = () => {
+    passTurnMutation.mutate()
   }
 
   // Focus the input when it becomes enabled (human hinter's turn)
@@ -705,6 +758,7 @@ function ChatHistory({
                 </div>
               )
             } else if (event.event_type === 'guess_made' && event.guess) {
+              // this is correct, do not change
               const correctText = event.correct ? '✓ Correct' : '✗ Wrong'
               return (
                 <div
@@ -744,8 +798,19 @@ function ChatHistory({
       </div>
 
       {shouldShowGuessMessage ? (
-        <div className='text-gray-400 text-sm text-center italic'>
-          Click on a card to make a guess
+        <div className='flex flex-col gap-2'>
+          <div className='text-gray-400 text-sm text-center italic'>
+            Click on a card to make a guess
+          </div>
+          {gameState.current_turn.left_guesses > 0 && (
+            <button
+              className='rounded bg-gray-500 p-2 text-white'
+              disabled={passTurnMutation.isPending}
+              onClick={handlePassTurn}
+            >
+              {passTurnMutation.isPending ? 'Passing...' : 'Pass Turn'}
+            </button>
+          )}
         </div>
       ) : (
         <>
