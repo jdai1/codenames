@@ -145,16 +145,9 @@ def spymaster_turn(
     result, assistant_msg, _, _ = spymaster.run(
         user_message=user_msg, message_history=message_history
     )
-    private_reasoning = (
-        result.get("reasoning") or (assistant_msg.get("reasoning_content") or "")
-    ).strip()
+    reasoning = (assistant_msg.get("reasoning_content") or "").strip()
     visible = (assistant_msg.get("content") or "").strip()
-    combined_parts = []
-    if private_reasoning:
-        combined_parts.append(f"[PRIVATE REASONING]\n{private_reasoning}")
-    if visible:
-        combined_parts.append(visible)
-    combined_message = "\n\n".join(combined_parts)
+    combined_message = "\n\n".join(part for part in (reasoning, visible) if part)
     if combined_message:
         message_history.append(
             {"role": "assistant", "content": f"SPYMASTER: {combined_message}"}
