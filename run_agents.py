@@ -86,15 +86,9 @@ def spymaster_turn(
         remaining_words=remaining,
     )
 
-    print(f"Spymaster user message: {user_msg}")
-
     result, assistant_msg, _, _ = spymaster.run(
         user_message=user_msg, message_history=message_history
     )
-    # PRINT HIDDEN REASONING IF IT EXISTS (skip empty/None)
-    _reason = assistant_msg.get("reasoning_content") or assistant_msg.get("content")
-    if _reason:
-        print(f"[{spymaster.name}] reasoning: {_reason}")
     if result.get("type") != "hint":
         return False, {"reason": f"unexpected result: {result}"}
 
@@ -144,17 +138,13 @@ def guesser_turn(
             if not votes_by_agent:
                 return "(none)"
             return ", ".join(
-                f"{agent_name}: {'PASS' if vote.lower() == 'pass' else vote.upper()}"
+                f"{agent_name.upper()}: "
+                f"{'PASS' if vote.lower() == 'pass' else vote.upper()}"
                 for agent_name, vote in votes_by_agent.items()
             )
 
         # Iterate limited discussion/voting rounds to reach majority
         for round_i in range(max_rounds):
-            # Show current board and clue at the start of each discussion round
-            print("\n=== Guesser Discussion Round", round_i + 1, "===")
-            print("Board (spectator view - uncensored):")
-            print(format_board_for_spymaster(game))
-            print(f"Clue: {last_hint.word.upper()} {last_hint.card_amount}")
             for agent in ops:
                 votes_display = formatted_votes()
                 user_msg = OPERATIVE_USER_PROMPT.format(
@@ -166,23 +156,15 @@ def guesser_turn(
                     votes=votes_display,
                 )
 
-                print(f"Operative user message: {user_msg}")
-
                 result, assistant_msg, _, _ = agent.run(
                     user_message=user_msg, message_history=message_history
                 )
-                # PRINT HIDDEN REASONING IF IT EXISTS (skip empty/None)
-                _reason = assistant_msg.get("reasoning_content") or assistant_msg.get(
-                    "content"
-                )
-                if _reason:
-                    print(f"[{agent.name}] reasoning: {_reason}")
                 if result.get("type") == "talk":
                     talk_msg = result.get("message", "")
                     message_history.append(
                         {"role": "assistant", "content": f"{agent.name}: {talk_msg}"}
                     )
-                    print(f"[{agent.name}] {talk_msg}")
+                    print(f"{agent.name.upper()}: {talk_msg}")
                 elif result.get("type") == "vote":
                     word = str(result.get("word", "")).strip()
                     if word:
@@ -196,12 +178,16 @@ def guesser_turn(
                             previous_vote is not None
                             and previous_vote.lower() == word.lower()
                         )
-                        suffix = (
-                            " (updated)"
-                            if changed
-                            else (" (unchanged)" if reaffirmed else "")
-                        )
-                        print(f"[{agent.name}] votes: {word.upper()}{suffix}")
+                        if changed:
+                            print(
+                                f"{agent.name.upper()} changes vote to {word.upper()}"
+                            )
+                        elif reaffirmed:
+                            print(
+                                f"{agent.name.upper()} reaffirms vote for {word.upper()}"
+                            )
+                        else:
+                            print(f"{agent.name.upper()} votes for {word.upper()}")
                 elif result.get("type") == "pass":
                     # Treat 'pass' as a vote option; require majority like word guesses
                     previous_vote = votes_by_agent.get(agent.name)
@@ -212,12 +198,12 @@ def guesser_turn(
                     reaffirmed = (
                         previous_vote is not None and previous_vote.lower() == "pass"
                     )
-                    suffix = (
-                        " (updated)"
-                        if changed
-                        else (" (unchanged)" if reaffirmed else "")
-                    )
-                    print(f"[{agent.name}] votes: PASS{suffix}")
+                    if changed:
+                        print(f"{agent.name.upper()} changes vote to PASS")
+                    elif reaffirmed:
+                        print(f"{agent.name.upper()} reaffirms vote to PASS")
+                    else:
+                        print(f"{agent.name.upper()} votes to PASS")
                 else:
                     # Ignore unknown result types
                     pass
@@ -239,7 +225,7 @@ def guesser_turn(
                                     "content": f"system: pass failed: {e}",
                                 }
                             )
-                            print(f"Pass failed: {e}")
+                            print(f"Vote result: PASS -> failed ({e})")
                         else:
                             message_history.append(
                                 {
@@ -247,7 +233,7 @@ def guesser_turn(
                                     "content": f"system: team decided to PASS; votes={vote_summary}",
                                 }
                             )
-                            print("Team reached majority to PASS. Passing turn.")
+                            print("Vote result: PASS -> turn passed")
                         votes_by_agent.clear()
                         return
                     else:
@@ -262,7 +248,7 @@ def guesser_turn(
                                     "content": f"system: guess '{guess_word}' failed: {e}",
                                 }
                             )
-                            print(f"Guess '{guess_word.upper()}' failed: {e}")
+                            print(f"Vote result: {guess_word.upper()} -> failed ({e})")
                             return
 
                         # Log outcome
@@ -274,7 +260,7 @@ def guesser_turn(
                             }
                         )
                         print(
-                            f"Guess -> {guess_word.upper()} ({correctness}); left_guesses={guess_res.left_guesses}"
+                            f"Vote result: {guess_word.upper()} -> {correctness.upper()}"
                         )
                         if vote_summary != "(none)":
                             message_history.append(
@@ -283,9 +269,6 @@ def guesser_turn(
                                     "content": f"system: vote summary -> {vote_summary}",
                                 }
                             )
-                        # Show updated board after guess
-                        print("Board (spectator view - uncensored) after guess:")
-                        print(format_board_for_spymaster(game))
 
                         # If game ended or turn switched (wrong or out of guesses), break out
                         if guess_res.is_game_over:
@@ -310,9 +293,9 @@ def guesser_turn(
             message_history.append(
                 {"role": "assistant", "content": f"system: pass failed: {e}"}
             )
-            print(f"Pass failed: {e}")
+            print(f"Vote result: PASS -> failed ({e})")
         else:
-            print("No majority reached after multiple rounds. Passing turn.")
+            print("Vote result: NO CONSENSUS -> PASS")
         return
 
 
@@ -334,6 +317,8 @@ def main():
     operative_histories: Dict[str, List[Dict[str, str]]] = defaultdict(list)
     spymaster_histories: Dict[str, List[Dict[str, str]]] = defaultdict(list)
 
+    round_number = 1
+
     # Main game loop
     print(f"Starting Codenames game: {game}")
     while not game.is_game_over():
@@ -344,7 +329,10 @@ def main():
 
         if _name(turn.role) == "HINTER":
             spy = blue_spy if team_key == "BLUE" else red_spy
-            print(f"Spymaster history: {spymaster_histories[team_key]}")
+            team_label = team_key.upper()
+            print(f"\n=== ROUND {round_number}: TEAM {team_label} ===")
+            print("Board (uncensored):")
+            print(format_board_for_spymaster(game))
             ok, info = spymaster_turn(game, spy, spymaster_histories[team_key])
             if not ok:
                 print(f"Spymaster error for {team_key}: {info}")
@@ -354,16 +342,12 @@ def main():
                 except Exception:
                     break
             else:
-                print("\n=== Spymaster Turn ===")
                 print(
-                    f"Team {team_key} spymaster gave hint: {info['clue']} {info['quantity']}"
+                    f"{spy.name.upper()} gives clue: {info['clue'].upper()} {info['quantity']}"
                 )
-                # Show full board for spectators
-                print("Board (spectator view - uncensored):")
-                print(format_board_for_spymaster(game))
+            round_number += 1
         else:
             ops = blue_ops if team_key == "BLUE" else red_ops
-            print("\n=== Guesser Turn ===")
             guesser_turn(game, ops, operative_histories[team_key])
 
         # Print a light summary of board progress
