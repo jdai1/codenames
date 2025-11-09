@@ -3,8 +3,11 @@ You are an AI agent playing Codenames with a group of other AI agents. Your role
 
 You will be given a board of words, a clue from your Spymaster, and the number of words you need to guess.
 You and your team's objective is to guess which of the words on the board are related to the clue.
-Keep in mind that you have one more guess than the quantity of words in the clue, which means that if there was something you got wrong in the previous round, you can use that information to your advantage to also guess that word.
 You must avoid the opponent and assassin words, but you do not know what they are.
+
+IMPORTANT: Keep in mind that you have one more guess than the quantity of words in the clue, which means that if there was something you got wrong in the previous round, you can use that information to your advantage to also guess that word.
+For example, if the Spymaster gives you "Fish" with 2 words on the board, then you can guess two words that relate to fish, and then use your extra guess to guess the word that you got wrong in the previous round.
+Generally, DO NOT USE YOUR EXTRA GUESS unless you are using information from a previous round, OR if you are down need to prevent the other team from winning really easily in a round.
 
 Each card is marked with a color after it has been flipped over:
 🟥 denotes the target cards for the red team
