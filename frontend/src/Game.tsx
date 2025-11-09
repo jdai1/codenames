@@ -235,6 +235,7 @@ function Game() {
           <label htmlFor='spymasterModeToggle'>Spymaster View</label>
           <input
             id='spymasterModeToggle'
+            className='w-6 h-6'
             type='checkbox'
             checked={spymasterView}
             onChange={(e) => setSpymasterView(e.target.checked)}
@@ -250,9 +251,38 @@ function Game() {
       )}
 
       {gameState && (
+        <div className='p-4 border-b border-gray-300'>
+          <div className='flex gap-6 items-center justify-center'>
+            <div className='text-lg font-bold'>
+              <span className='text-red-600'>
+                Red: {gameState.score.red.revealed}/{gameState.score.red.total}
+              </span>
+              {' | '}
+              <span className='text-blue-600'>
+                Blue: {gameState.score.blue.revealed}/
+                {gameState.score.blue.total}
+              </span>
+            </div>
+            <div className='text-sm text-gray-600'>
+              Current Turn: {gameState.current_turn.team} -{' '}
+              {gameState.current_turn.role}
+              {gameState.current_turn.role === 'GUESSER' &&
+                ` (${gameState.current_turn.left_guesses} guesses left)`}
+            </div>
+            {gameState.is_game_over && gameState.winner && (
+              <div className='text-lg font-bold text-green-600'>
+                Game Over! Winner: {gameState.winner.team_color} -{' '}
+                {gameState.winner.reason}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {gameState && (
         <div className='grid grid-cols-5 h-full'>
           <div className='col-span-1 bg-gray-100'>
-            <ChatHistory team='RED' />
+            <ChatHistory team='RED' gameState={gameState} />
           </div>
           <div className='col-span-3 bg-gray-200 p-4'>
             <div
@@ -271,7 +301,7 @@ function Game() {
             </div>
           </div>
           <div className='col-span-1 bg-gray-100'>
-            <ChatHistory team='BLUE' />
+            <ChatHistory team='BLUE' gameState={gameState} />
           </div>
         </div>
       )}
@@ -297,15 +327,18 @@ const TEAM_NAME_TO_COLOR = {
 
 type ChatHistoryProps = {
   team: 'RED' | 'BLUE'
+  gameState: GameState
 }
 
-function ChatHistory({ team }: ChatHistoryProps) {
+function ChatHistory({ team, gameState }: ChatHistoryProps) {
   const [hint, setHint] = useState('')
+
+  const score = team === 'RED' ? gameState.score.red : gameState.score.blue
 
   return (
     <div className='p-4 flex flex-col h-full gap-4'>
       <h2 className={`text-lg font-bold ${TEAM_NAME_TO_COLOR[team]}`}>
-        Team {TEAM_NAME_TO_LABEL[team]} 6/7
+        Team {TEAM_NAME_TO_LABEL[team]} {score.revealed}/{score.total}
       </h2>
 
       <div className='border border-gray-300 p-2 grow h-full flex flex-col gap-2'>

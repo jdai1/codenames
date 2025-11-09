@@ -4,6 +4,7 @@
 import json
 import time
 import random
+import random
 from typing import Dict
 
 from flask import Flask, Response, jsonify, request, stream_with_context
@@ -48,6 +49,9 @@ def create_game():
     seed = data.get("seed")
     if seed is None:
         seed = random.randint(0, 1_000_000_000)
+    seed = data.get("seed")
+    if seed is None:
+        seed = random.randint(0, 1_000_000_000)
 
     try:
         game = CodenamesGame(
@@ -58,11 +62,11 @@ def create_game():
 
         state = game.get_state(show_colors=True)
 
+        state = game.get_state(show_colors=True)
+
         return jsonify(
-            {"game_id": game.game_id,
-                "message": "Game created successfully", "game_state": state.dict()}
-            {"game_id": game.game_id,
-                "message": "Game created successfully", "game_state": state.dict()}
+            {"game_id": game.game_id, "message": "Game created successfully",
+                "game_state": state.dict()}
         ), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 400
