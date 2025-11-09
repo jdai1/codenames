@@ -866,6 +866,7 @@ function ChatHistory({
           !(aiLoading && aiLoading.team === team) && (
             <div className='text-gray-400 text-sm'>No activity yet</div>
           )}
+
         {aiLoading && aiLoading.team === team && (
           <div
             className={`p-2 rounded text-sm italic ${
