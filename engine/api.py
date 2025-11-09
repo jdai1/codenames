@@ -84,14 +84,16 @@ def get_game_state(game_id: str):
 
     Query params:
         show_colors: true/false (default: false) - show all card colors
+        include_history: true/false (default: false) - include event history
     """
     if game_id not in games:
         return jsonify({"error": "Game not found"}), 404
 
     game = games[game_id]
     show_colors = request.args.get("show_colors", "false").lower() == "true"
+    include_history = request.args.get("include_history", "false").lower() == "true"
 
-    state = game.get_state(show_colors=show_colors)
+    state = game.get_state(show_colors=show_colors, include_history=include_history)
     return jsonify(state.dict())
 
 

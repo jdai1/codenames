@@ -171,17 +171,38 @@ class CodenamesGame:
         """
         return self.state.winner
 
-    def get_state(self, show_colors: bool = False) -> GameStateResponse:
+    def get_state(self, show_colors: bool = False, include_history: bool = False) -> GameStateResponse:
         """
         Get complete game state in one call.
 
         Args:
             show_colors: If True, show all card colors (spymaster view).
                         If False, only show revealed cards (operative view).
+            include_history: If True, include event history in response.
 
         Returns:
             Complete game state
         """
+        event_history = None
+        if include_history:
+            event_history = {
+                "blue_team": {
+                    "hints": [str(e) for e in self.state.history.blue_team.hints_given],
+                    "guesses": [str(e) for e in self.state.history.blue_team.guesses_made],
+                    "chats": [str(e) for e in self.state.history.blue_team.chat_messages],
+                    "passes": [str(e) for e in self.state.history.blue_team.passes],
+                    "all_events": [str(e) for e in self.state.history.blue_team.all_events],
+                },
+                "red_team": {
+                    "hints": [str(e) for e in self.state.history.red_team.hints_given],
+                    "guesses": [str(e) for e in self.state.history.red_team.guesses_made],
+                    "chats": [str(e) for e in self.state.history.red_team.chat_messages],
+                    "passes": [str(e) for e in self.state.history.red_team.passes],
+                    "all_events": [str(e) for e in self.state.history.red_team.all_events],
+                },
+                "global_events": [str(e) for e in self.state.history.global_events],
+            }
+
         return GameStateResponse(
             game_id=self.game_id,
             board=self.get_board(show_colors=show_colors),
@@ -191,7 +212,8 @@ class CodenamesGame:
             last_hint=self.get_last_hint(),
             is_game_over=self.is_game_over(),
             winner=self.get_winner(),
-            board_size=len(self.state.board.cards)
+            board_size=len(self.state.board.cards),
+            event_history=event_history
         )
 
     # ===== Game Actions =====

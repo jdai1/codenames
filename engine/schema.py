@@ -1,7 +1,7 @@
 """Pydantic schemas for API responses."""
 
 from enum import Enum
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Dict
 from pydantic import BaseModel
 
 from engine.game.card import Card
@@ -97,6 +97,8 @@ class GameStateResponse(BaseModel):
     is_game_over: bool
     winner: Optional[Winner]
     board_size: int
+    # Event history
+    event_history: Optional[Dict[str, Any]] = None
 
     class Config:
         use_enum_values = True
