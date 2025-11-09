@@ -218,6 +218,114 @@ function Game() {
   // Use the appropriate game state based on spymasterView
   const gameState = spymasterView ? gameStateFull : gameStateOperative
 
+  // Map player type to model name
+  const getModelName = (playerType: PlayerTypeId): string => {
+    if (playerType === 'GPT5') return 'gpt-4'
+    if (playerType === 'GEMINI') return 'gemini'
+    return 'gpt-4' // default
+  }
+
+  // Track if we've already triggered AI action for current turn to prevent duplicate calls
+  const aiActionTriggeredRef = useRef<string>('')
+
+  // Auto-trigger AI actions when it's an AI's turn
+  useEffect(() => {
+    if (!gameState || !gameId || gameState.is_game_over) {
+      aiActionTriggeredRef.current = ''
+      return
+    }
+
+    const currentTeam = gameState.current_turn.team
+    const currentRole = gameState.current_turn.role
+    const turnKey = `${currentTeam}-${currentRole}-${gameState.current_turn.left_guesses}`
+
+    // Skip if we've already triggered for this turn
+    if (aiActionTriggeredRef.current === turnKey) return
+
+    const teamConfig = currentTeam === 'RED' ? gameType.red : gameType.blue
+    const isAITurn =
+      teamConfig[currentRole === 'HINTER' ? 'spymaster' : 'guesser'] !== 'HUMAN'
+
+    if (isAITurn) {
+      aiActionTriggeredRef.current = turnKey
+      const model = getModelName(
+        teamConfig[currentRole === 'HINTER' ? 'spymaster' : 'guesser']
+      )
+
+      if (currentRole === 'HINTER') {
+        // AI Spymaster - give hint
+        fetch(new URL(`/games/${gameId}/ai/hint`, API_URL), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ model }),
+        })
+          .then((response) => {
+            if (!response.ok) {
+              return response.json().then((error) => {
+                throw new Error(error.error || 'Failed to get AI hint')
+              })
+            }
+            return response.json()
+          })
+          .then(() => {
+            // Refetch game state after AI hint
+            queryClient.invalidateQueries({ queryKey: ['gameState', gameId] })
+            queryClient.invalidateQueries({
+              queryKey: ['gameStateFull', gameId],
+            })
+            aiActionTriggeredRef.current = '' // Reset to allow next turn
+          })
+          .catch((error) => {
+            console.error('AI hint error:', error)
+            aiActionTriggeredRef.current = '' // Reset on error
+          })
+      } else if (currentRole === 'GUESSER') {
+        // AI Guesser - make guess
+        fetch(new URL(`/games/${gameId}/ai/guess`, API_URL), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ model, n_operatives: 1 }),
+        })
+          .then((response) => {
+            if (!response.ok) {
+              return response.json().then((error) => {
+                throw new Error(error.error || 'Failed to get AI guess')
+              })
+            }
+            return response.json()
+          })
+          .then(() => {
+            // Refetch game state after AI guess
+            queryClient.invalidateQueries({ queryKey: ['gameState', gameId] })
+            queryClient.invalidateQueries({
+              queryKey: ['gameStateFull', gameId],
+            })
+            aiActionTriggeredRef.current = '' // Reset to allow next turn
+          })
+          .catch((error) => {
+            console.error('AI guess error:', error)
+            aiActionTriggeredRef.current = '' // Reset on error
+          })
+      }
+    } else {
+      // Reset when it's a human turn
+      aiActionTriggeredRef.current = ''
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    gameState?.current_turn?.team,
+    gameState?.current_turn?.role,
+    gameState?.current_turn?.left_guesses,
+    gameState?.is_game_over,
+    gameId,
+    gameType,
+    queryClient,
+  ])
+
   const getCardType = (card: CardWithIndex): CardProps['type'] => {
     if (!card.revealed && !spymasterView) {
       return 'UNKNOWN'
