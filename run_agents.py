@@ -280,7 +280,7 @@ def guesser_turn(
                         except Exception as e:  # pylint: disable=broad-except
                             message_history.append(
                                 {
-                                    "role": "assistant",
+                                    "role": "user",
                                     "content": f"system: pass failed: {e}",
                                 }
                             )
@@ -288,7 +288,7 @@ def guesser_turn(
                         else:
                             message_history.append(
                                 {
-                                    "role": "assistant",
+                                    "role": "user",
                                     "content": f"system: team decided to PASS; votes={vote_summary}",
                                 }
                             )
@@ -303,7 +303,7 @@ def guesser_turn(
                         except Exception as e:  # pylint: disable=broad-except
                             message_history.append(
                                 {
-                                    "role": "assistant",
+                                    "role": "user",
                                     "content": f"system: guess '{guess_word}' failed: {e}",
                                 }
                             )
@@ -314,7 +314,7 @@ def guesser_turn(
                         correctness = "correct" if guess_res.correct else "wrong"
                         message_history.append(
                             {
-                                "role": "assistant",
+                                "role": "user",
                                 "content": f"system: guessed {guess_word.upper()} -> {correctness}; left_guesses={guess_res.left_guesses}",
                             }
                         )
@@ -324,7 +324,7 @@ def guesser_turn(
                         if vote_summary != "(none)":
                             message_history.append(
                                 {
-                                    "role": "assistant",
+                                    "role": "user",
                                     "content": f"system: vote summary -> {vote_summary}",
                                 }
                             )
@@ -351,7 +351,7 @@ def guesser_turn(
             _ = game.pass_turn(actor=actor)
         except Exception as e:  # pylint: disable=broad-except
             message_history.append(
-                {"role": "assistant", "content": f"system: pass failed: {e}"}
+                {"role": "user", "content": f"system: pass failed: {e}"}
             )
             print(f"Vote result: PASS -> failed ({e})")
         else:
@@ -415,7 +415,7 @@ def main():
             if summary:
                 spymaster_histories[team_key].append(
                     {
-                        "role": "assistant",
+                        "role": "user",
                         "content": f"OPERATIVE SUMMARY: {summary}",
                     }
                 )
