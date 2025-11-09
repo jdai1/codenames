@@ -77,6 +77,16 @@ class GuessEvent(GameEvent):
         actor_str = str(self.actor) if isinstance(self.actor, LLMActor) else self.actor.name
         return f"[{self.team_color.value}] {actor_str} Guess: {self.guess}"
 
+    @property
+    def correct(self) -> bool:
+        """Whether the guess was correct."""
+        return self.guess.correct
+
+    def dict(self, *args, **kwargs) -> dict:
+        result = super().dict(*args, **kwargs)
+        result["correct"] = self.correct
+        return result
+
 
 class PassEvent(GameEvent):
     """Event for when a team passes their turn."""
