@@ -1,4 +1,19 @@
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Manrope:wght@200..800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Manrope:wght@200..800&family=Roboto+Slab:wght@100..900&display=swap');
 @import 'tailwindcss';
+
+@theme {
+  --color-code-names-red: #924123;
+  --color-code-names-red-light: #db967d;
+  --color-code-names-blue: #4b88be;
+  --color-code-names-blue-light: #a3c6e5;
+  --color-code-names-neutral: #d1b384;
+  --color-code-names-neutral-light: #f0dbb9;
+}
+
+body {
+  font-family: 'Roboto Slab', serif;
+}
 
 input,
 button,
@@ -13,4 +28,8 @@ select {
     opacity: 0.5;
     filter: none;
   }
+}
+
+.card-label {
+  font-family: 'Bebas Neue', cursive;
 }

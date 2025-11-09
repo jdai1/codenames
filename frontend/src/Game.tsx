@@ -784,7 +784,7 @@ function Game() {
             </div>
           </div>
           <div className='flex gap-2 items-center'>
-            <span className='text-blue-600 font-bold'>Blue Team:</span>
+            <span className='text-cyan-700 font-bold'>Blue Team:</span>
             <div className='flex gap-1 items-center'>
               <label className='text-sm'>Spymaster:</label>
               <PlayerTypeSelect
@@ -882,7 +882,11 @@ function Game() {
               aiLoading={aiLoading}
             />
           </div>
-          <div className='col-span-3 bg-gray-200 p-4 overflow-scroll'>
+          <div
+            className={`col-span-3 ${
+              gameState.current_turn.team === 'RED' ? 'bg-red-50' : 'bg-cyan-50'
+            } p-4 overflow-scroll`}
+          >
             <div className='grid gap-2 grid-cols-5 grid-rows-5 h-full'>
               {gameState.board.map((card) => {
                 const isGuesserTurn = gameState.current_turn.role === 'GUESSER'
@@ -907,6 +911,7 @@ function Game() {
                     }
                     clickable={canClick}
                     revealed={card.revealed}
+                    spymasterView={spymasterView}
                   />
                 )
               })}
@@ -941,7 +946,7 @@ const TEAM_NAME_TO_LABEL = {
 
 const TEAM_NAME_TO_COLOR = {
   RED: 'text-red-600',
-  BLUE: 'text-blue-600',
+  BLUE: 'text-cyan-700',
 }
 
 type ChatHistoryProps = {
@@ -1169,7 +1174,7 @@ function ChatHistory({
                 <div
                   key={`event-${idx}`}
                   className={`p-2 rounded ${
-                    team === 'RED' ? 'bg-red-100' : 'bg-blue-100'
+                    team === 'RED' ? 'bg-red-100' : 'bg-cyan-100'
                   }`}
                 >
                   Hint: {event.hint.word} {event.hint.card_amount}
@@ -1199,7 +1204,7 @@ function ChatHistory({
               return (
                 <div
                   key={`event-${idx}`}
-                  className='p-2 rounded bg-blue-50 text-sm italic'
+                  className='p-2 rounded bg-cyan-100 text-sm italic'
                 >
                   {event.actor.name}: {event.message}
                 </div>
@@ -1287,7 +1292,7 @@ function ChatHistory({
         {aiLoading && aiLoading.team === team && (
           <div
             className={`p-2 rounded text-sm italic ${
-              team === 'RED' ? 'bg-red-50' : 'bg-blue-50'
+              team === 'RED' ? 'bg-red-50' : 'bg-cyan-100'
             }`}
           >
             {aiLoading.action === 'hint'
@@ -1360,12 +1365,20 @@ function ChatHistory({
 type CardProps = {
   label: string
   type: 'UNKNOWN' | 'NEUTRAL' | 'RED' | 'BLUE' | 'ASSASSIN'
+  spymasterView: boolean
   onClick?: () => void
   clickable?: boolean
   revealed?: boolean
 }
 
-function Card({ label, type, onClick, clickable, revealed }: CardProps) {
+function Card({
+  label,
+  type,
+  onClick,
+  clickable,
+  revealed,
+  spymasterView,
+}: CardProps) {
   const card = cva(
     [
       'bold',
@@ -1375,14 +1388,25 @@ function Card({ label, type, onClick, clickable, revealed }: CardProps) {
       'text-center',
       'flex',
       'items-center',
-      'justify-center',
+      'justify-between',
     ],
     {
       variants: {
         type: {
-          NEUTRAL: ['bg-amber-100'],
-          RED: ['bg-red-800', 'text-white', 'border-red-800'],
-          BLUE: ['bg-blue-800', 'text-white', 'border-blue-800'],
+          NEUTRAL: [
+            'bg-[color:var(--color-code-names-neutral)]',
+            'border-[color:var(--color-code-names-neutral)]',
+          ],
+          RED: [
+            'bg-[color:var(--color-code-names-red)]',
+            'text-white',
+            'border-[color:var(--color-code-names-red)]',
+          ],
+          BLUE: [
+            'bg-[color:var(--color-code-names-blue)]',
+            'text-white',
+            'border-[color:var(--color-code-names-blue)]',
+          ],
           ASSASSIN: ['bg-black', 'text-white'],
           UNKNOWN: ['bg-gray-100'],
         },
@@ -1394,14 +1418,38 @@ function Card({ label, type, onClick, clickable, revealed }: CardProps) {
   const clickableClasses = clickable
     ? 'cursor-pointer hover:opacity-80 hover:shadow-xl hover:bg-white transition-all'
     : ''
-  const disabledClasses = revealed ? 'opacity-60 cursor-not-allowed' : ''
+  const disabledClasses = revealed ? 'cursor-not-allowed' : ''
+  const opacityClasses = revealed && spymasterView ? 'opacity-25' : ''
 
   return (
     <div
-      className={`${baseClasses} ${clickableClasses} ${disabledClasses}`}
+      className={`${baseClasses} ${clickableClasses} ${disabledClasses} ${opacityClasses} p-8 flex flex-col justify-between items-stretch card-label gap-4 ${
+        label.length > 10 ? 'text-3xl' : 'text-4xl'
+      } border-8`}
       onClick={clickable && !revealed && onClick ? onClick : undefined}
     >
-      {label}
+      <div className='flex justify-end'>
+        {(revealed || spymasterView) && (
+          <span className='flex justify-center mb-2'>
+            {type === 'RED' && (
+              <img src={'/red.svg'} alt='Red' className='h-16 w-16' />
+            )}
+            {type === 'BLUE' && (
+              <img src={'/blue.svg'} alt='Blue' className='h-16 w-16' />
+            )}
+            {type === 'ASSASSIN' && (
+              <img src={'/assassin.svg'} alt='Assassin' className='h-16 w-16' />
+            )}
+            {type === 'NEUTRAL' && (
+              <img src={'/innocent.svg'} alt='Neutral' className='h-16 w-16' />
+            )}
+          </span>
+        )}
+      </div>
+      <div className='py-2 px-4 bg-white text-black min-h-16 flex items-center justify-center'>
+        {label}
+        {/* {revealed ? ' ✓' : ''} */}
+      </div>
     </div>
   )
 }
