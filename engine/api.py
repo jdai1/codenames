@@ -272,9 +272,13 @@ def ai_make_guess(game_id: str):
             # Use the high-level guesser_turn function from run_agents.py
             # This handles the full guessing logic including voting, multiple guesses, etc.
             # It now yields events as they happen
-            for event in guesser_turn(game, operatives, message_history, max_rounds=25):
+            for item in guesser_turn(game, operatives, message_history, max_rounds=25):
+                # Skip tuples (model_cost, token_usage) - only stream OperativeEvent objects
+                if isinstance(item, tuple):
+                    continue
+
                 # Send event as SSE - convert datetime to string for JSON serialization
-                event_dict = event.dict()
+                event_dict = item.dict()
                 if 'timestamp' in event_dict and event_dict['timestamp']:
                     event_dict['timestamp'] = event_dict['timestamp'].isoformat()
                 yield "data: " + json.dumps(event_dict) + "\n\n"
