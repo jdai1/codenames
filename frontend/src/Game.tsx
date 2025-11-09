@@ -228,11 +228,17 @@ function Game() {
 
   // Track if we've already triggered AI action for current turn to prevent duplicate calls
   const aiActionTriggeredRef = useRef<string>('')
+  // Track AI loading state: { team: 'RED' | 'BLUE', action: 'hint' | 'guess' } | null
+  const [aiLoading, setAiLoading] = useState<{
+    team: 'RED' | 'BLUE'
+    action: 'hint' | 'guess'
+  } | null>(null)
 
   // Auto-trigger AI actions when it's an AI's turn
   useEffect(() => {
     if (!gameState || !gameId || gameState.is_game_over) {
       aiActionTriggeredRef.current = ''
+      setAiLoading(null)
       return
     }
 
@@ -255,6 +261,7 @@ function Game() {
 
       if (currentRole === 'HINTER') {
         // AI Spymaster - give hint
+        setAiLoading({ team: currentTeam, action: 'hint' })
         fetch(new URL(`/games/${gameId}/ai/hint`, API_URL), {
           method: 'POST',
           headers: {
@@ -277,13 +284,16 @@ function Game() {
               queryKey: ['gameStateFull', gameId],
             })
             aiActionTriggeredRef.current = '' // Reset to allow next turn
+            setAiLoading(null)
           })
           .catch((error) => {
             console.error('AI hint error:', error)
             aiActionTriggeredRef.current = '' // Reset on error
+            setAiLoading(null)
           })
       } else if (currentRole === 'GUESSER') {
         // AI Guesser - make guess
+        setAiLoading({ team: currentTeam, action: 'guess' })
         fetch(new URL(`/games/${gameId}/ai/guess`, API_URL), {
           method: 'POST',
           headers: {
@@ -306,15 +316,18 @@ function Game() {
               queryKey: ['gameStateFull', gameId],
             })
             aiActionTriggeredRef.current = '' // Reset to allow next turn
+            setAiLoading(null)
           })
           .catch((error) => {
             console.error('AI guess error:', error)
             aiActionTriggeredRef.current = '' // Reset on error
+            setAiLoading(null)
           })
       }
     } else {
       // Reset when it's a human turn
       aiActionTriggeredRef.current = ''
+      setAiLoading(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -512,6 +525,7 @@ function Game() {
               gameType={gameType.red}
               gameId={gameId!}
               onHintSubmitted={() => setSpymasterView(false)}
+              aiLoading={aiLoading}
             />
           </div>
           <div className='col-span-3 bg-gray-200 p-4'>
@@ -554,6 +568,7 @@ function Game() {
               team='BLUE'
               gameState={gameState}
               gameType={gameType.blue}
+              aiLoading={aiLoading}
               gameId={gameId!}
               onHintSubmitted={() => setSpymasterView(false)}
             />
@@ -586,6 +601,7 @@ type ChatHistoryProps = {
   gameType: { spymaster: PlayerTypeId; guesser: PlayerTypeId }
   gameId: string
   onHintSubmitted: () => void
+  aiLoading: { team: 'RED' | 'BLUE'; action: 'hint' | 'guess' } | null
 }
 
 function ChatHistory({
@@ -594,6 +610,7 @@ function ChatHistory({
   gameType,
   gameId,
   onHintSubmitted,
+  aiLoading,
 }: ChatHistoryProps) {
   const [hint, setHint] = useState('')
   const [hintCount, setHintCount] = useState('')
@@ -793,8 +810,20 @@ function ChatHistory({
         {(!gameState.event_history ||
           (team === 'RED'
             ? gameState.event_history.red_team.length === 0
-            : gameState.event_history.blue_team.length === 0)) && (
-          <div className='text-gray-400 text-sm'>No activity yet</div>
+            : gameState.event_history.blue_team.length === 0)) &&
+          !(aiLoading && aiLoading.team === team) && (
+            <div className='text-gray-400 text-sm'>No activity yet</div>
+          )}
+        {aiLoading && aiLoading.team === team && (
+          <div
+            className={`p-2 rounded text-sm italic ${
+              team === 'RED' ? 'bg-red-50' : 'bg-blue-50'
+            }`}
+          >
+            {aiLoading.action === 'hint'
+              ? 'AI is thinking of a hint...'
+              : 'AI is making guesses...'}
+          </div>
         )}
       </div>
 

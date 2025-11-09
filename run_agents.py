@@ -16,9 +16,15 @@ from agents.prompts import (
 )
 
 from engine.game_main import CodenamesGame, GameStateResponse
-from engine.game.events import LLMActor
 from engine.game.exceptions import CardNotFoundError
 from engine.game.base import canonical_format
+from engine.game.events import (
+    LLMActor,
+    SpymasterEvent,
+    OperativeEvent,
+    OperativeToolType,
+)
+from engine.game.player import PlayerRole
 
 
 def _name(val: Any) -> str:
@@ -164,8 +170,18 @@ def spymaster_turn(
             message_history.append(
                 {"role": "assistant", "content": f"SPYMASTER: {combined_message}"}
             )
+            
+            actor = LLMActor(name=spymaster.name, model=spymaster.model)
+            spymaster_event = SpymasterEvent(
+                team_color=state.current_turn.team,
+                player_role=PlayerRole.HINTER,
+                actor=actor,
+                reasoning=private_reasoning,
+            )
+            game.state.history.add_event(spymaster_event)
         if result.get("type") != "hint":
             return False, {"reason": f"unexpected result: {result}"}
+        
 
         clue_raw = result.get("clue") or ""
         clue = clue_raw.strip()
@@ -257,8 +273,23 @@ def guesser_turn(
                 result, assistant_msg, _, _ = agent.run(
                     user_message=user_msg, message_history=message_history
                 )
+
+                # Create LLM actor for this operative
+                actor = LLMActor(name=agent.name, model=agent.model)
+
                 if result.get("type") == "talk":
                     talk_msg = result.get("message", "")
+
+                    # Add operative event for interpretability
+                    operative_event = OperativeEvent(
+                        team_color=team_turn,
+                        player_role=PlayerRole.GUESSER,
+                        actor=actor,
+                        tool=OperativeToolType.TALK,
+                        message=talk_msg,
+                    )
+                    game.state.history.add_event(operative_event)
+
                     message_history.append(
                         {"role": "assistant", "content": f"{agent.name}: {talk_msg}"}
                     )
@@ -297,6 +328,15 @@ def guesser_turn(
                                 f"{agent.name.upper()} attempted invalid vote {word.upper()} (already revealed)"
                             )
                             continue
+                        # Add operative event for interpretability
+                        operative_event = OperativeEvent(
+                            team_color=team_turn,
+                            player_role=PlayerRole.GUESSER,
+                            actor=actor,
+                            tool=OperativeToolType.VOTE_GUESS,
+                            message=word,
+                        )
+                        game.state.history.add_event(operative_event)
 
                         previous_vote = votes_by_agent.get(agent.name)
                         votes_by_agent[agent.name] = word
@@ -319,6 +359,16 @@ def guesser_turn(
                         else:
                             print(f"{agent.name.upper()} votes for {word.upper()}")
                 elif result.get("type") == "pass":
+                    # Add operative event for interpretability
+                    operative_event = OperativeEvent(
+                        team_color=team_turn,
+                        player_role=PlayerRole.GUESSER,
+                        actor=actor,
+                        tool=OperativeToolType.VOTE_PASS,
+                        message=None,
+                    )
+                    game.state.history.add_event(operative_event)
+
                     # Treat 'pass' as a vote option; require majority like word guesses
                     previous_vote = votes_by_agent.get(agent.name)
                     votes_by_agent[agent.name] = "pass"
