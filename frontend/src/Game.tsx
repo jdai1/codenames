@@ -429,8 +429,12 @@ function ChatHistory({
   const isCurrentTeam = gameState.current_turn.team === team
   const isSpymasterTurn =
     isCurrentTeam && gameState.current_turn.role === 'HINTER'
+  const isGuesserTurn =
+    isCurrentTeam && gameState.current_turn.role === 'GUESSER'
   const isHumanSpymaster = gameType.spymaster === 'HUMAN'
+  const isHumanGuesser = gameType.guesser === 'HUMAN'
   const shouldEnableHintInput = isSpymasterTurn && isHumanSpymaster
+  const shouldShowGuessMessage = isGuesserTurn && isHumanGuesser
 
   const giveHintMutation = useMutation({
     mutationFn: async ({
@@ -506,50 +510,58 @@ function ChatHistory({
         <div className='p-2 bg-red-100 rounded'>Hint: automobile 6</div>
       </div>
 
-      <div className='flex gap-2'>
-        <input
-          ref={hintInputRef}
-          type='text'
-          className='border border-gray-300 p-2 grow min-w-0'
-          value={hint}
-          onChange={(event) => setHint(event.target.value)}
-          disabled={!shouldEnableHintInput}
-          placeholder={shouldEnableHintInput ? 'Enter hint word' : ''}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && hint && hintCount) {
-              handleSubmitHint()
-            }
-          }}
-        />
+      {shouldShowGuessMessage ? (
+        <div className='text-gray-400 text-sm text-center italic'>
+          Click on a card to make a guess
+        </div>
+      ) : (
+        <>
+          <div className='flex gap-2'>
+            <input
+              ref={hintInputRef}
+              type='text'
+              className='border border-gray-300 p-2 grow min-w-0'
+              value={hint}
+              onChange={(event) => setHint(event.target.value)}
+              disabled={!shouldEnableHintInput}
+              placeholder={shouldEnableHintInput ? 'Enter hint word' : ''}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && hint && hintCount) {
+                  handleSubmitHint()
+                }
+              }}
+            />
 
-        <input
-          type='number'
-          className='border border-gray-300 p-2 w-16'
-          value={hintCount}
-          onChange={(event) => setHintCount(event.target.value)}
-          disabled={!shouldEnableHintInput}
-          placeholder={shouldEnableHintInput ? '#' : ''}
-          min='1'
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && hint && hintCount) {
-              handleSubmitHint()
-            }
-          }}
-        />
-      </div>
+            <input
+              type='number'
+              className='border border-gray-300 p-2 w-16'
+              value={hintCount}
+              onChange={(event) => setHintCount(event.target.value)}
+              disabled={!shouldEnableHintInput}
+              placeholder={shouldEnableHintInput ? '#' : ''}
+              min='1'
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && hint && hintCount) {
+                  handleSubmitHint()
+                }
+              }}
+            />
+          </div>
 
-      <button
-        className='rounded bg-teal-500 p-2'
-        disabled={
-          !hint ||
-          !hintCount ||
-          !shouldEnableHintInput ||
-          giveHintMutation.isPending
-        }
-        onClick={handleSubmitHint}
-      >
-        {giveHintMutation.isPending ? 'Submitting...' : 'Submit hint'}
-      </button>
+          <button
+            className='rounded bg-teal-500 p-2'
+            disabled={
+              !hint ||
+              !hintCount ||
+              !shouldEnableHintInput ||
+              giveHintMutation.isPending
+            }
+            onClick={handleSubmitHint}
+          >
+            {giveHintMutation.isPending ? 'Submitting...' : 'Submit hint'}
+          </button>
+        </>
+      )}
     </div>
   )
 }
