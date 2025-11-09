@@ -79,6 +79,7 @@ type GameEvent = {
   event_type: 'hint_given' | 'guess_made' | 'turn_passed' | 'chat_message'
   hint?: HintEventData // For hint_given events
   guess?: GivenGuessData // For guess_made events
+  correct?: boolean // Flattened from guess.correct for guess_made events
   message?: string // For chat_message events
   message_metadata?: Record<string, unknown> // For chat_message events
   player_role: string
@@ -812,7 +813,7 @@ function ChatHistory({
             </button>
           )}
         </div>
-      ) : (
+      ) : isSpymasterTurn && isHumanSpymaster ? (
         <>
           <div className='flex gap-2'>
             <input
@@ -821,8 +822,7 @@ function ChatHistory({
               className='border border-gray-300 p-2 grow min-w-0'
               value={hint}
               onChange={(event) => setHint(event.target.value)}
-              disabled={!shouldEnableHintInput}
-              placeholder={shouldEnableHintInput ? 'Enter hint word' : ''}
+              placeholder='Enter hint word'
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && hint && hintCount) {
                   handleSubmitHint()
@@ -835,8 +835,7 @@ function ChatHistory({
               className='border border-gray-300 p-2 w-16'
               value={hintCount}
               onChange={(event) => setHintCount(event.target.value)}
-              disabled={!shouldEnableHintInput}
-              placeholder={shouldEnableHintInput ? '#' : ''}
+              placeholder='#'
               min='1'
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && hint && hintCount) {
@@ -848,18 +847,13 @@ function ChatHistory({
 
           <button
             className='rounded bg-teal-500 p-2'
-            disabled={
-              !hint ||
-              !hintCount ||
-              !shouldEnableHintInput ||
-              giveHintMutation.isPending
-            }
+            disabled={!hint || !hintCount || giveHintMutation.isPending}
             onClick={handleSubmitHint}
           >
             {giveHintMutation.isPending ? 'Submitting...' : 'Submit hint'}
           </button>
         </>
-      )}
+      ) : null}
     </div>
   )
 }
