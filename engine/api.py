@@ -9,6 +9,7 @@ from flask_cors import CORS
 
 from engine.game_main import CodenamesGame
 from engine.game.events import UserActor
+from engine.game.player import PlayerRole
 from run_agents import (
     build_operatives,
     build_spymaster,
@@ -28,8 +29,7 @@ games: Dict[str, CodenamesGame] = {}
 def health_check():
     """Health check endpoint."""
     return jsonify(
-        {"name": "Codenames API", "version": "1.0.0",
-            "active_games": len(games)}
+        {"name": "Codenames API", "version": "1.0.0", "active_games": len(games)}
     )
 
 
@@ -53,20 +53,19 @@ def create_game():
     seed = data.get("seed")
     if seed is None:
         seed = random.randint(0, 1_000_000_000)
-    seed = data.get("seed")
-    if seed is None:
-        seed = random.randint(0, 1_000_000_000)
 
     try:
-        game = CodenamesGame(
-            language=language, board_size=board_size, seed=seed)
+        game = CodenamesGame(language=language, board_size=board_size, seed=seed)
         games[game.game_id] = game
 
         state = game.get_state(show_colors=True)
 
         return jsonify(
-            {"game_id": game.game_id, "message": "Game created successfully",
-                "game_state": state.dict()}
+            {
+                "game_id": game.game_id,
+                "message": "Game created successfully",
+                "game_state": state.dict(),
+            }
         ), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 400
@@ -192,7 +191,9 @@ def ai_give_hint(game_id: str):
         spymaster = build_spymaster(team_name=_name(team), model=model)
 
         # Get message history from game state
-        message_history = game.state.get_message_history(team, game.state.current_player_role)
+        message_history = game.state.get_message_history(
+            team, game.state.current_player_role
+        )
 
         # Use the high-level spymaster_turn function from run_agents.py
         success, result_info = spymaster_turn(game, spymaster, message_history)
@@ -201,15 +202,17 @@ def ai_give_hint(game_id: str):
             return jsonify({"error": result_info.get("reason", "Hint failed")}), 400
 
         # Return success response with hint details
-        return jsonify({
-            "success": True,
-            "hint": {
-                "word": result_info["clue"],
-                "card_amount": result_info["quantity"],
-                "team_color": _name(team)
-            },
-            "left_guesses": game.state.left_guesses
-        })
+        return jsonify(
+            {
+                "success": True,
+                "hint": {
+                    "word": result_info["clue"],
+                    "card_amount": result_info["quantity"],
+                    "team_color": _name(team),
+                },
+                "left_guesses": game.state.left_guesses,
+            }
+        )
 
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
@@ -235,28 +238,46 @@ def ai_make_guess(game_id: str):
     n_operatives = data.get("n_operatives", 1)
 
     try:
+        if game.state.current_player_role != PlayerRole.GUESSER:
+            turn = game.state.current_player_role.value
+            team_color = _name(game.state.current_team_color)
+            return jsonify(
+                {
+                    "error": "It is not currently the guesser's turn",
+                    "current_turn": {
+                        "team": team_color,
+                        "role": turn,
+                    },
+                }
+            ), 400
         # Build operative agents using the same primitive as run_agents.py
         state = game.get_state(show_colors=False)
         team = state.current_turn.team
-        operatives = build_operatives(team_name=_name(team), model=model, n=n_operatives)
+        operatives = build_operatives(
+            team_name=_name(team), model=model, n=n_operatives
+        )
 
         # Get message history from game state
-        message_history = game.state.get_message_history(team, game.state.current_player_role)
+        message_history = game.state.get_message_history(
+            team, game.state.current_player_role
+        )
 
         # Use the high-level guesser_turn function from run_agents.py
         # This handles the full guessing logic including voting, multiple guesses, etc.
         guesser_turn(game, operatives, message_history, max_rounds=25)
 
         # Return success - guesser_turn handles all the guessing internally
-        return jsonify({
-            "success": True,
-            "message": "Guesser turn completed",
-            "current_turn": {
-                "team": _name(game.state.current_team_color),
-                "role": game.state.current_player_role.value
-            },
-            "is_game_over": game.is_game_over()
-        })
+        return jsonify(
+            {
+                "success": True,
+                "message": "Guesser turn completed",
+                "current_turn": {
+                    "team": _name(game.state.current_team_color),
+                    "role": game.state.current_player_role.value,
+                },
+                "is_game_over": game.is_game_over(),
+            }
+        )
 
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
