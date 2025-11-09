@@ -197,7 +197,7 @@ def ai_give_hint(game_id: str):
         )
 
         # Use the high-level spymaster_turn function from run_agents.py
-        success, result_info = spymaster_turn(game, spymaster, message_history)
+        success, result_info, _, _, combined_message = spymaster_turn(game, spymaster, message_history)
 
         if not success:
             return jsonify({"error": result_info.get("reason", "Hint failed")}), 400
@@ -206,6 +206,7 @@ def ai_give_hint(game_id: str):
         return jsonify(
             {
                 "success": True,
+                "combined_message": combined_message,
                 "hint": {
                     "word": result_info["clue"],
                     "card_amount": result_info["quantity"],
@@ -272,9 +273,16 @@ def ai_make_guess(game_id: str):
             # Use the high-level guesser_turn function from run_agents.py
             # This handles the full guessing logic including voting, multiple guesses, etc.
             # It now yields events as they happen
-            for event in guesser_turn(game, operatives, message_history, max_rounds=25):
-                # Send event as SSE
-                yield "data: " + json.dumps(event.dict()) + "\n\n"
+            for item in guesser_turn(game, operatives, message_history, max_rounds=25):
+                # Skip tuples (model_cost, token_usage) - only stream OperativeEvent objects
+                if isinstance(item, tuple):
+                    continue
+
+                # Send event as SSE - convert datetime to string for JSON serialization
+                event_dict = item.dict()
+                if 'timestamp' in event_dict and event_dict['timestamp']:
+                    event_dict['timestamp'] = event_dict['timestamp'].isoformat()
+                yield "data: " + json.dumps(event_dict) + "\n\n"
 
             # Send final completion event
             yield "data: " + json.dumps({

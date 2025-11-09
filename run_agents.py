@@ -132,8 +132,8 @@ def spymaster_turn(
     game: CodenamesGame,
     spymaster: Agent,
     message_history: List[Dict[str, str]],
-) -> Tuple[bool, Dict[str, Any], float, int]:
-    """Handle a single spymaster turn. Returns (success, result_dict, model_cost, token_usage)."""
+) -> Tuple[bool, Dict[str, Any], float, int, str | None]:
+    """Handle a single spymaster turn. Returns (success, result_dict, model_cost, token_usage, combined_reasoning_or_none)."""
     state = game.get_state(show_colors=True)
     board_str = format_board_for_spymaster(game)
     team = _name(state.current_turn.team)
@@ -170,7 +170,7 @@ def spymaster_turn(
             combined_parts.append(f"[PRIVATE REASONING]\n{private_reasoning}")
         if visible:
             combined_parts.append(visible)
-        combined_message = "\n\n".join(combined_parts)
+        combined_message = "\n\n".join(combined_parts) if combined_parts else None
         if combined_message:
             message_history.append(
                 {"role": "assistant", "content": f"SPYMASTER: {combined_message}"}
@@ -190,6 +190,7 @@ def spymaster_turn(
                 {"reason": f"unexpected result: {result}"},
                 total_model_cost,
                 total_token_usage,
+                combined_message,
             )
 
         clue_raw = result.get("clue") or ""
@@ -222,6 +223,7 @@ def spymaster_turn(
                 },
                 total_model_cost,
                 total_token_usage,
+                combined_message,
             )
         if not hint_res.success:
             return (
@@ -233,12 +235,14 @@ def spymaster_turn(
                 },
                 total_model_cost,
                 total_token_usage,
+                combined_message,
             )
         return (
             True,
             {"clue": clue, "quantity": qty},
             total_model_cost,
             total_token_usage,
+            combined_message,
         )
 
     return (
@@ -246,6 +250,7 @@ def spymaster_turn(
         {"reason": "hint attempts exhausted"},
         total_model_cost,
         total_token_usage,
+        None,
     )
 
 
