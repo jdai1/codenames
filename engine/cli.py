@@ -6,25 +6,7 @@ from engine.game_main import CodenamesGame
 
 def print_board(game, show_colors=False):
     """Print the current board state."""
-    board = game.get_board(show_colors=show_colors)
-
-    if show_colors:
-        print("\n=== BOARD (SPYMASTER VIEW) ===")
-    else:
-        print("\n=== BOARD (OPERATIVE VIEW) ===")
-
-    # Print board in a grid format (5x5)
-    for i in range(0, len(board), 5):
-        row = board[i : i + 5]
-        for card in row:
-            color_emoji = ""
-            if card.color:
-                emoji_map = {"RED": "🟥", "BLUE": "🟦", "GRAY": "⬜", "BLACK": "💀"}
-                color_emoji = emoji_map.get(card.color, "")
-            revealed_marker = "✓" if card.revealed else " "
-            print(f"{revealed_marker}{color_emoji} {card.word:12}", end=" ")
-        print()
-    print()
+    print(game.state.board.printable_string if show_colors else game.state.board.censored.printable_string)
 
 
 def print_score(game):
@@ -34,6 +16,60 @@ def print_score(game):
         f"Score - Blue: {score.blue.revealed}/{score.blue.total} | "
         f"Red: {score.red.revealed}/{score.red.total}"
     )
+    print()
+
+
+def print_event_history(game):
+    """Print the event history for both teams."""
+    history = game.state.history
+
+    print("\n" + "=" * 50)
+    print("EVENT HISTORY")
+    print("=" * 50)
+
+    # Print Blue Team History
+    print("\n🟦 BLUE TEAM HISTORY:")
+    print("-" * 50)
+    blue_history = history.blue_team
+
+    if blue_history.all_events:
+        for event in blue_history.all_events:
+            print(f"  {event}")
+    else:
+        print("  No events recorded")
+
+    print(f"\nSummary:")
+    print(f"  Hints given: {len(blue_history.hints_given)}")
+    print(f"  Guesses made: {len(blue_history.guesses_made)}")
+    print(f"  Chat messages: {len(blue_history.chat_messages)}")
+    print(f"  Passes: {len(blue_history.passes)}")
+
+    # Print Red Team History
+    print("\n🟥 RED TEAM HISTORY:")
+    print("-" * 50)
+    red_history = history.red_team
+
+    if red_history.all_events:
+        for event in red_history.all_events:
+            print(f"  {event}")
+    else:
+        print("  No events recorded")
+
+    print(f"\nSummary:")
+    print(f"  Hints given: {len(red_history.hints_given)}")
+    print(f"  Guesses made: {len(red_history.guesses_made)}")
+    print(f"  Chat messages: {len(red_history.chat_messages)}")
+    print(f"  Passes: {len(red_history.passes)}")
+
+    # Print Global Timeline
+    print("\n🌍 GLOBAL TIMELINE:")
+    print("-" * 50)
+    if history.global_events:
+        for event in history.global_events:
+            print(f"  {event}")
+    else:
+        print("  No events recorded")
+
     print()
 
 
@@ -140,6 +176,8 @@ def main():
                 except ValueError as e:
                     print(f"\n✗ Error: {e}")
                     print("Try again.")
+        # Print event history
+        print_event_history(game)
 
     # Game over
     print("\n" + "=" * 50)
