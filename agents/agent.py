@@ -1,13 +1,34 @@
 import json
 import logging
+import time
 from typing import Any, Dict, List
 
 from litellm import completion, completion_cost, token_counter
 
 from agents.operative_tools import TalkTool, VoteTool, PassTool
 from agents.spymaster_tools import HintTool
+from model_names import MODEL_STRINGS
 
 logger = logging.getLogger(__name__)
+
+
+def _supports_reasoning_effort(model_id: str) -> bool:
+    """
+    Return True if the given canonical model_id should receive reasoning_effort,
+    as indicated by MODEL_STRINGS entries which are [canonical_id, bool].
+    """
+    try:
+        for _, entry in MODEL_STRINGS.items():
+            if isinstance(entry, (list, tuple)) and len(entry) >= 2:
+                canonical_id, allow_reasoning = entry[0], bool(entry[1])
+            else:
+                canonical_id, allow_reasoning = str(entry), False
+            if str(canonical_id) == str(model_id):
+                return allow_reasoning
+    except Exception:
+        # Be conservative: if mapping lookup fails, do not send reasoning_effort
+        return False
+    return False
 
 
 class Agent:
@@ -32,6 +53,48 @@ class Agent:
         self.model = model
         self.max_iterations = max_iterations
 
+    def _is_claude_model(self) -> bool:
+        """Check if the model is a Claude model."""
+        model_str = str(self.model).lower()
+        return "claude" in model_str
+
+    def _fix_claude_messages(
+        self, messages: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """
+        Convert messages to Claude's thinking format if needed.
+        Claude requires assistant messages with thinking to have content as an array
+        starting with a thinking block.
+        """
+        fixed_messages = []
+        for msg in messages:
+            if msg.get("role") == "assistant":
+                content = msg.get("content", "")
+                # If content is a string, convert to Claude's format
+                if isinstance(content, str) and content:
+                    # Check if there's reasoning_content to use as thinking
+                    reasoning = msg.get("reasoning_content", "")
+                    if reasoning:
+                        # Create content blocks: thinking first, then text
+                        fixed_content = [
+                            {"type": "thinking", "text": reasoning},
+                            {"type": "text", "text": content},
+                        ]
+                    else:
+                        # No thinking, just text block
+                        fixed_content = [{"type": "text", "text": content}]
+
+                    fixed_msg = {**msg, "content": fixed_content}
+                    # Remove reasoning_content as it's now in content blocks
+                    fixed_msg.pop("reasoning_content", None)
+                    fixed_messages.append(fixed_msg)
+                else:
+                    # Already in correct format or empty
+                    fixed_messages.append(msg)
+            else:
+                fixed_messages.append(msg)
+        return fixed_messages
+
     def run(
         self, user_message: str, message_history: List[Dict[str, str]]
     ) -> tuple[Dict[str, str], Dict[str, Any], float, int]:
@@ -47,6 +110,10 @@ class Agent:
         messages.extend(message_history)
         messages.append({"role": "user", "content": user_message})
 
+        # Convert messages to Claude's format if needed (before first API call)
+        if self._is_claude_model():
+            messages = self._fix_claude_messages(messages)
+
         # Prepare tools for the model
         tool_list = [t.to_openai_tool() for t in (self.tools or [])]
         tools_by_name = {t.name: t for t in (self.tools or [])}
@@ -54,23 +121,79 @@ class Agent:
         token_usage = 0
         # Iteratively allow the model to call tools and react
         for _ in range(max(1, self.max_iterations)):
-            resp = completion(
-                model=self.model,
-                messages=messages,
-                tools=tool_list if tool_list else None,
-                tool_choice="auto" if tool_list else None,
-                # reasoning_effort="low"
-            )
+            completion_kwargs: Dict[str, Any] = {
+                "model": self.model,
+                "messages": messages,
+                "tools": tool_list if tool_list else None,
+                "tool_choice": "auto" if tool_list else None,
+            }
+            if _supports_reasoning_effort(self.model):
+                completion_kwargs["reasoning_effort"] = "low"
 
-            model_cost = completion_cost(completion_response=resp)
-            token_usage = token_counter(model=self.model, messages=messages)
+            # Retry logic: retry all errors with exponential backoff (1s, 3s, 10s)
+            max_retries = 3
+            backoff_delays = [1, 3, 10]  # seconds for each retry attempt
+            resp = None
+            for attempt in range(max_retries):
+                try:
+                    resp = completion(**completion_kwargs)
+                    break
+                except Exception as e:
+                    error_str = str(e).lower()
+
+                    # Check for Claude thinking format errors - need to fix message history
+                    if "thinking" in error_str and "expected" in error_str:
+                        logger.warning(
+                            "Claude thinking format error detected. Attempting to fix message history..."
+                        )
+                        # Convert string content to Claude's content block format
+                        messages = self._fix_claude_messages(messages)
+                        if attempt < max_retries - 1:
+                            continue
+
+                    # Retry all errors with exponential backoff (1s, 3s, 10s)
+                    wait_time = backoff_delays[attempt]
+                    if attempt < max_retries - 1:
+                        logger.warning(
+                            f"API error (attempt {attempt + 1}/{max_retries}): {e}. "
+                            f"Retrying in {wait_time}s..."
+                        )
+                        time.sleep(wait_time)
+                    else:
+                        # Last attempt failed, wait 10s then raise
+                        logger.error(
+                            f"API error (final attempt {attempt + 1}/{max_retries}): {e}. "
+                            f"Waiting {wait_time}s before raising..."
+                        )
+                        time.sleep(wait_time)
+                        raise
+
+            # Validate response has choices
+            if not resp or "choices" not in resp or not resp["choices"]:
+                error_msg = f"Empty response from {self.model}: {resp}"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+
+            if self.model != "moonshot/kimi-k2-thinking":
+                model_cost = completion_cost(completion_response=resp)
+                token_usage = token_counter(model=self.model, messages=messages)
             choice = resp["choices"][0]["message"]
 
             # Append assistant message to conversation
+            # For Claude models with thinking, preserve the content array format
             assistant_msg: Dict[str, Any] = {
                 "role": "assistant",
-                "content": choice.get("content") or "",
             }
+
+            # Preserve Claude's content block format if present
+            content = choice.get("content")
+            if isinstance(content, list):
+                # Claude format: array of content blocks
+                assistant_msg["content"] = content
+            else:
+                # Standard format: string content
+                assistant_msg["content"] = content or ""
+
             if "tool_calls" in choice and choice["tool_calls"]:
                 assistant_msg["tool_calls"] = choice["tool_calls"]
             if "reasoning_content" in choice and choice["reasoning_content"]:
@@ -197,8 +320,7 @@ You must pick a tool no matter what
 
     # Run the agent
     message_history = []
-    result, assistant_msg, cost, tokens = agent.run(
-        user_message, message_history)
+    result, assistant_msg, cost, tokens = agent.run(user_message, message_history)
 
     print("\n=== Agent Result ===")
     print(f"Result: {result}")
