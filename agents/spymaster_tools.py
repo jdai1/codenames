@@ -1,3 +1,5 @@
+from typing import Optional
+
 from agents.tool import Tool
 from pydantic import BaseModel
 
@@ -5,6 +7,7 @@ from pydantic import BaseModel
 class HintArguments(BaseModel):
     clue: str
     quantity: int
+    reasoning: Optional[str] = None
 
 
 class HintTool(Tool):
@@ -24,8 +27,11 @@ class HintTool(Tool):
         """
         Give a hint to the operatives and the number of words on the board that relate to that hint.
         """
-        return {
+        result = {
             "type": "hint",
             "clue": arguments.clue,
             "quantity": arguments.quantity,
         }
+        if arguments.reasoning is not None:
+            result["reasoning"] = arguments.reasoning
+        return result
