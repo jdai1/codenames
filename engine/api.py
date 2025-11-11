@@ -53,9 +53,10 @@ def create_game():
 
     language = data.get("language", "english")
     board_size = data.get("board_size", 25)
-    seed = data.get("seed")
-    if seed is None:
-        seed = random.randint(0, 1_000_000_000)
+    # seed = data.get("seed")
+
+    # if seed is None:
+    seed = random.randint(0, 1_000_000_000)
     neo_words = data.get("neo_words", False)
 
     try:

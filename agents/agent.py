@@ -121,6 +121,7 @@ class Agent:
         token_usage = 0
         # Iteratively allow the model to call tools and react
         for _ in range(max(1, self.max_iterations)):
+            # self.model = "gpt-4.1"
             completion_kwargs: Dict[str, Any] = {
                 "model": self.model,
                 "messages": messages,
@@ -179,7 +180,8 @@ class Agent:
 
             if self.model != "moonshot/kimi-k2-thinking":
                 model_cost = completion_cost(completion_response=resp)
-                token_usage = token_counter(model=self.model, messages=messages)
+                token_usage = token_counter(
+                    model=self.model, messages=messages)
             choice = resp["choices"][0]["message"]
 
             # Append assistant message to conversation
@@ -323,7 +325,8 @@ You must pick a tool no matter what
 
     # Run the agent
     message_history = []
-    result, assistant_msg, cost, tokens = agent.run(user_message, message_history)
+    result, assistant_msg, cost, tokens = agent.run(
+        user_message, message_history)
 
     print("\n=== Agent Result ===")
     print(f"Result: {result}")
